@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>emous — Anonymous Hyperlocal Confessions & Viral Secret Inbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            emous: {
+              bg: '#0D0D11',
+              surface: '#181820',
+              pink: '#FF1E8E',
+              lime: '#CCFF00',
+              yellow: '#FFE600',
+              cyan: '#00F0FF',
+              purple: '#7928CA',
+            }
+          },
+          fontFamily: {
+            display: ['Syne', 'sans-serif'],
+            sans: ['Space Grotesk', 'sans-serif'],
+          },
+          boxShadow: {
+            brutal: '3px 3px 0px 0px #000000',
+            'brutal-lg': '5px 5px 0px 0px #000000',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #0D0D11;
+      color: #FFFFFF;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(255, 30, 142, 0.16) 0%, transparent 35%),
+        radial-gradient(circle at 85% 25%, rgba(204, 255, 0, 0.13) 0%, transparent 35%),
+        radial-gradient(circle at 50% 90%, rgba(255, 230, 0, 0.09) 0%, transparent 40%);
+      overflow-x: hidden;
+    }
+    .flyer-card {
+      border: 2.5px solid #000000;
+      box-shadow: 4px 4px 0px 0px #000000;
+    }
+    .flyer-btn {
+      border: 2.5px solid #000000;
+      box-shadow: 3px 3px 0px 0px #000000;
+      transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease;
+    }
+    .flyer-btn:hover {
+      transform: translate(-1.5px, -1.5px);
+      box-shadow: 5px 5px 0px 0px #000000;
+    }
+    .flyer-btn:active {
+      transform: translate(1.5px, 1.5px);
+      box-shadow: 1px 1px 0px 0px #000000;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Continuous Streetwear Ticker / Marquee for Hashtag Filter Bar */
+    @keyframes tagMarquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .tag-marquee-viewport {
+      overflow-x: auto;
+      position: relative;
+      mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%);
+    }
+    .tag-marquee-track {
+      display: flex;
+      width: max-content;
+      gap: 0.45rem;
+      animation: tagMarquee 24s linear infinite;
+      padding: 0.25rem 0;
+    }
+    .tag-marquee-viewport:hover .tag-marquee-track {
+      animation-play-state: paused;
+    }
+
+    /* Icon-only Card Action Pill that smoothly expands to show its label on hover */
+    .card-action-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      min-width: 36px;
+      padding: 0 9px;
+      border-radius: 12px;
+      border: 2px solid #000000;
+      box-shadow: 2.5px 2.5px 0px 0px #000000;
+      transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .card-action-pill:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0px 0px #000000;
+      padding: 0 12px;
+    }
+    .card-action-label {
+      max-width: 0;
+      opacity: 0;
+      margin-left: 0;
+      overflow: hidden;
+      transition: max-width 0.26s ease, opacity 0.2s ease, margin-left 0.22s ease;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .card-action-pill:hover .card-action-label,
+    .card-action-pill:focus-visible .card-action-label {
+      max-width: 170px;
+      opacity: 1;
+      margin-left: 6px;
+    }
+
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(0.8); opacity: 1; }
+      100% { transform: translateY(-280px) scale(1.35); opacity: 0; }
+    }
+    .emoji-float {
+      animation: floatUp 1.8s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24 selection:bg-emous-pink selection:text-white">
+  <div id="app"></div>
+
+  <script>
+    const API_BASE = '/api/v1';
+    const STORAGE_DEVICE_KEY = 'emous_device_fingerprint_v1';
+    const STORAGE_HANDLE_KEY = 'emous_user_handle_v1';
+
+    const POPULAR_TAGS = [
+      '#WorkConfessions',
+      '#CampusTea',
+      '#NightOut',
+      '#CrushAlert',
+      '#UnpopularOpinion',
+      '#LateNightThoughts',
+      '#Streetalk'
+    ];
+
+    const STORY_THEMES = [
+      {
+        id: 'story-pink-lime',
+        name: 'Pink x Acid Lime',
+        canvasBg: '#0D0D11',
+        topCardBg: '#FF1E8E',
+        topCardText: '#FFFFFF',
+        bottomCardBg: '#CCFF00',
+        bottomCardText: '#0D0D11'
+      },
+      {
+        id: 'story-yellow-pink',
+        name: 'Electric Yellow x Magenta',
+        canvasBg: '#0D0D11',
+        topCardBg: '#FFE600',
+        topCardText: '#0D0D11',
+        bottomCardBg: '#FF1E8E',
+        bottomCardText: '#FFFFFF'
+      },
+      {
+        id: 'story-lime-white',
+        name: 'Lime x Crisp White',
+        canvasBg: '#120458',
+        topCardBg: '#CCFF00',
+        topCardText: '#0D0D11',
+        bottomCardBg: '#FFFFFF',
+        bottomCardText: '#0D0D11'
+      }
+    ];
+
+    const QUICK_PROMPTS = [
+      'Be honest... what was your first impression of me? 👀',
+      'Drop a secret you would never tell me to my face 🤫',
+      'Lowkey had a crush on you since we met ngl 🔥',
+      'What song reminds you of me on late night drives? 🎧',
+      'Rate my vibe from 1-10 & don’t hold back ⚡'
+    ];
+
+    const state = {
+      route: window.location.pathname.startsWith('/ask/') ? 'ask' : 'main',
+      askTargetHandle: decodeURIComponent(window.location.pathname.replace(/^\/ask\//, '') || 'GoldenWizard'),
+      activeScreen: new URLSearchParams(window.location.search).get('tab') === 'inbox' ? 'inbox' : 'feed',
+      mobileSimulator: false,
+      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1024,
+      deviceId: '',
+      myHandle: 'GoldenWizard',
+      demoGoldenWizard: true,
+      feedMode: 'global',
+      selectedTag: 'All',
+      coords: { lat: 40.7128, lng: -74.006 },
+      gpsStatus: '5-mile radius active',
+      posts: [],
+      inboxMessages: [],
+      unreadCount: 0,
+      toast: null,
+      isComposerOpen: false,
+      draftContent: '',
+      draftTag: '#WorkConfessions',
+      draftBg: {
+        id: 'grad-neon-riot',
+        type: 'gradient',
+        name: 'Neon Riot',
+        value: 'linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)',
+        textColor: '#FFFFFF',
+        badgeBg: '#CCFF00',
+        badgeText: '#0D0D11'
+      },
+      activeStoryMsg: null,
+      replyText: '',
+      storyThemeId: 'story-pink-lime',
+      askQuestion: '',
+      askThemeIndex: 0,
+      askSentSuccess: false
+    };
+
+    // Helper: returns true whenever the user is either on a narrow phone screen OR inside the Mobile App Frame simulator
+    function isCompactMobile() {
+      return state.mobileSimulator || state.viewportWidth < 640;
+    }
+
+    window.addEventListener('resize', () => {
+      const nextW = window.innerWidth;
+      if ((nextW < 640) !== (state.viewportWidth < 640)) {
+        state.viewportWidth = nextW;
+        render();
+      } else {
+        state.viewportWidth = nextW;
+      }
+    });
+
+    function getOrCreateDeviceId() {
+      let id = localStorage.getItem(STORAGE_DEVICE_KEY);
+      if (!id) {
+        id = 'web-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+        localStorage.setItem(STORAGE_DEVICE_KEY, id);
+      }
+      state.deviceId = id;
+      return id;
+    }
+
+    function getCurrentHandle() {
+      return state.demoGoldenWizard ? 'GoldenWizard' : state.myHandle;
+    }
+
+    function showToast(msg) {
+      state.toast = msg;
+      render();
+      setTimeout(() => {
+        if (state.toast === msg) {
+          state.toast = null;
+          render();
+        }
+      }, 3200);
+    }
+
+    function formatRelativeTime(iso) {
+      const diffSec = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+      if (diffSec < 60) return `${diffSec}s`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h`;
+      return `${Math.floor(diffHr / 24)}d`;
+    }
+
+    function escapeHtml(str = '') {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function initApp() {
+      const deviceId = getOrCreateDeviceId();
+      try {
+        const res = await fetch(`${API_BASE}/identity/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+          body: JSON.stringify({ deviceId, preferredHandle: localStorage.getItem(STORAGE_HANDLE_KEY) || undefined })
+        });
+        const data = await res.json();
+        if (data.handle) {
+          state.myHandle = data.handle;
+          localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
+        }
+      } catch (e) {}
+
+      await Promise.all([loadFeed(), loadInbox()]);
+      render();
+    }
+
+    async function loadFeed() {
+      const params = new URLSearchParams({ mode: state.feedMode });
+      if (state.selectedTag && state.selectedTag !== 'All') {
+        params.set('tag', state.selectedTag);
+      }
+      if (state.feedMode === 'near') {
+        params.set('lat', String(state.coords.lat));
+        params.set('lng', String(state.coords.lng));
+        params.set('radiusMiles', '5');
+      }
+      const res = await fetch(`${API_BASE}/posts?${params.toString()}`, {
+        headers: { 'x-device-id': state.deviceId }
+      });
+      const data = await res.json();
+      state.posts = data.posts || [];
+      render();
+    }
+
+    async function loadInbox() {
+      const handle = getCurrentHandle();
+      const res = await fetch(`${API_BASE}/inbox?handle=${encodeURIComponent(handle)}`, {
+        headers: { 'x-device-id': state.deviceId }
+      });
+      const data = await res.json();
+      state.inboxMessages = data.messages || [];
+      state.unreadCount = data.unreadCount || 0;
+      render();
+    }
+
+    window.navigateToAsk = (handle) => {
+      state.route = 'ask';
+      state.askTargetHandle = handle;
+      state.askSentSuccess = false;
+      state.askQuestion = '';
+      window.history.pushState({}, '', `/ask/${encodeURIComponent(handle)}`);
+      render();
+    };
+
+    window.navigateToMain = (screen = 'feed', openComposer = false) => {
+      state.route = 'main';
+      state.activeScreen = screen;
+      if (openComposer) {
+        state.isComposerOpen = true;
+      }
+      window.history.pushState({}, '', screen === 'inbox' ? '/?tab=inbox' : '/');
+      loadFeed();
+      loadInbox();
+      render();
+    };
+
+    window.openCardComposer = () => {
+      state.isComposerOpen = true;
+      render();
+    };
+
+    window.addEventListener('popstate', () => {
+      if (window.location.pathname.startsWith('/ask/')) {
+        state.route = 'ask';
+        state.askTargetHandle = decodeURIComponent(window.location.pathname.replace(/^\/ask\//, '') || 'GoldenWizard');
+      } else {
+        state.route = 'main';
+      }
+      render();
+    });
+
+    window.handleRerollIdentity = async () => {
+      state.demoGoldenWizard = false;
+      const res = await fetch(`${API_BASE}/identity/reroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+        body: JSON.stringify({ deviceId: state.deviceId })
+      });
+      const data = await res.json();
+      if (data.handle) {
+        state.myHandle = data.handle;
+        localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
+        await loadInbox();
+        showToast(`🎲 Switched auto-handle to @${data.handle}`);
+      }
+    };
+
+    window.handleToggleFeedMode = (mode) => {
+      state.feedMode = mode;
+      if (mode === 'near' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            state.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            state.gpsStatus = 'Live Browser GPS (5-mi radius)';
+            loadFeed();
+          },
+          () => {
+            state.gpsStatus = 'Downtown Demo Hub (5-mi radius)';
+            loadFeed();
+          },
+          { timeout: 3500 }
+        );
+      } else {
+        loadFeed();
+      }
+    };
+
+    window.handleSelectTag = (tag) => {
+      state.selectedTag = tag;
+      loadFeed();
+    };
+
+    window.handleFlagPost = async (postId) => {
+      const res = await fetch(`${API_BASE}/posts/${postId}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+        body: JSON.stringify({ deviceId: state.deviceId })
+      });
+      const data = await res.json();
+      if (data.isHidden) {
+        state.posts = state.posts.filter((p) => p._id !== postId);
+        showToast('🛡️ Post reached 3 flags and was automatically hidden!');
+      } else {
+        state.posts = state.posts.map((p) =>
+          p._id === postId ? { ...p, flagsCount: data.flagsCount, isFlaggedByMe: true } : p
+        );
+        showToast(`🚩 Reported (${data.flagsCount}/3 flags to auto-hide)`);
+      }
+      render();
+    };
+
+    window.handleShuffleComposerBg = async () => {
+      const res = await fetch(`${API_BASE}/backgrounds/shuffle?excludeId=${encodeURIComponent(state.draftBg.id)}`);
+      const data = await res.json();
+      if (data.background) {
+        state.draftBg = data.background;
+        render();
+      }
+    };
+
+    window.handlePublishPost = async (e) => {
+      e.preventDefault();
+      if (!state.draftContent.trim()) return;
+      const res = await fetch(`${API_BASE}/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+        body: JSON.stringify({
+          content: state.draftContent.trim(),
+          tag: state.draftTag,
+          background: state.draftBg,
+          authorHandle: getCurrentHandle(),
+          lat: state.coords.lat,
+          lng: state.coords.lng,
+          deviceId: state.deviceId
+        })
+      });
+      const data = await res.json();
+      if (data.post) {
+        state.posts.unshift(data.post);
+        state.draftContent = '';
+        state.isComposerOpen = false;
+        if (state.route === 'ask') {
+          state.route = 'main';
+          state.activeScreen = 'feed';
+          window.history.pushState({}, '', '/');
+        }
+        showToast('🔥 Visual confession card dropped to the feed!');
+      }
+    };
+
+    window.handleCopyLink = () => {
+      const handle = getCurrentHandle();
+      const url = `${window.location.origin}/ask/${handle}`;
+      navigator.clipboard?.writeText(url);
+      showToast(`🔗 Copied: emous.app/ask/${handle}`);
+    };
+
+    window.handleToggleDemoHandle = () => {
+      state.demoGoldenWizard = !state.demoGoldenWizard;
+      loadInbox();
+      showToast(state.demoGoldenWizard ? '🧙‍♂️ Viewing @GoldenWizard Inbox' : `👤 Viewing @${state.myHandle} Inbox`);
+    };
+
+    window.handleOpenStoryModal = (msgId) => {
+      const found = state.inboxMessages.find((m) => m._id === msgId);
+      if (!found) return;
+      state.activeStoryMsg = found;
+      state.replyText = found.reply || '';
+      state.storyThemeId = found.themeId || 'story-pink-lime';
+      render();
+    };
+
+    window.handleSaveStoryReply = async (downloadPng) => {
+      if (!state.activeStoryMsg) return;
+      const reply = state.replyText.trim() || '🤫🔥';
+      const res = await fetch(`${API_BASE}/inbox/${state.activeStoryMsg._id}/reply`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply, themeId: state.storyThemeId })
+      });
+      const data = await res.json();
+      if (data.message) {
+        state.activeStoryMsg = data.message;
+        state.inboxMessages = state.inboxMessages.map((m) => (m._id === data.message._id ? data.message : m));
+        if (downloadPng) {
+          exportStoryCanvasPng(getCurrentHandle(), data.message.question, reply, state.storyThemeId);
+          showToast('📸 Downloaded 9:16 Story PNG for Instagram/Snapchat!');
+        } else {
+          showToast('✨ Reply saved!');
+        }
+        render();
+      }
+    };
+
+    window.handleFlagInbox = async (msgId) => {
+      const res = await fetch(`${API_BASE}/inbox/${msgId}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: state.deviceId, instantHide: true })
+      });
+      const data = await res.json();
+      if (data.isHidden) {
+        state.inboxMessages = state.inboxMessages.filter((m) => m._id !== msgId);
+        showToast('🛡️ Secret note hidden from inbox');
+        render();
+      }
+    };
+
+    window.handleShuffleAskIdea = () => {
+      state.askQuestion = QUICK_PROMPTS[Math.floor(Math.random() * QUICK_PROMPTS.length)];
+      state.askThemeIndex = (state.askThemeIndex + 1) % STORY_THEMES.length;
+      render();
+    };
+
+    window.handleSendSecretAsk = async (e) => {
+      e.preventDefault();
+      if (!state.askQuestion.trim()) {
+        showToast('Type a secret message first! 🤫');
+        return;
+      }
+      const theme = STORY_THEMES[state.askThemeIndex % STORY_THEMES.length];
+      const res = await fetch(`${API_BASE}/inbox/${encodeURIComponent(state.askTargetHandle)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+        body: JSON.stringify({
+          question: state.askQuestion.trim(),
+          themeId: theme.id,
+          deviceId: state.deviceId
+        })
+      });
+      if (res.ok) {
+        state.askSentSuccess = true;
+        state.askQuestion = '';
+        triggerCelebrationExplosion();
+        await loadInbox();
+        render();
+      }
+    };
+
+    function triggerCelebrationExplosion() {
+      if (window.confetti) {
+        window.confetti({
+          particleCount: 100,
+          spread: 85,
+          origin: { y: 0.6 },
+          colors: ['#FF1E8E', '#CCFF00', '#FFE600', '#00F0FF', '#FFFFFF']
+        });
+      }
+      const container = document.createElement('div');
+      container.className = 'fixed inset-0 pointer-events-none z-50 overflow-hidden';
+      const emojis = ['🚀', '🤫', '🔥', '⚡', '👀', '💥', '✨'];
+      for (let i = 0; i < 14; i++) {
+        const span = document.createElement('span');
+        span.textContent = emojis[i % emojis.length];
+        span.style.left = `${10 + Math.random() * 80}%`;
+        span.className = 'absolute bottom-20 text-3xl emoji-float';
+        container.appendChild(span);
+      }
+      document.body.appendChild(container);
+      setTimeout(() => container.remove(), 2000);
+    }
+
+    function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      let currentY = y;
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+          ctx.fillText(line.trim(), x, currentY);
+          line = words[n] + ' ';
+          currentY += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line.trim(), x, currentY);
+    }
+
+    function exportStoryCanvasPng(handle, question, reply, themeId) {
+      const theme = STORY_THEMES.find((t) => t.id === themeId) || STORY_THEMES[0];
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = theme.canvasBg;
+      ctx.fillRect(0, 0, 1080, 1920);
+
+      ctx.fillStyle = '#FFE600';
+      ctx.fillRect(290, 120, 500, 76);
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(290, 120, 500, 76);
+      ctx.fillStyle = '#0D0D11';
+      ctx.font = '900 32px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`ASK @${handle.toUpperCase()}`, 540, 170);
+
+      const cardX = 90, topY = 260, cardW = 900, cardH = 620;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 18, topY + 18, cardW, cardH);
+      ctx.fillStyle = theme.topCardBg;
+      ctx.fillRect(cardX, topY, cardW, cardH);
+      ctx.strokeRect(cardX, topY, cardW, cardH);
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 45, topY + 45, 380, 58);
+      ctx.fillStyle = '#CCFF00';
+      ctx.font = '800 25px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('🤫 ANONYMOUS CONFESSION', cardX + 65, topY + 83);
+
+      ctx.fillStyle = theme.topCardText;
+      ctx.font = '800 46px sans-serif';
+      wrapCanvasText(ctx, `"${question}"`, cardX + 55, topY + 190, cardW - 110, 64);
+
+      const botY = 950;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 18, botY + 18, cardW, cardH);
+      ctx.fillStyle = theme.bottomCardBg;
+      ctx.fillRect(cardX, botY, cardW, cardH);
+      ctx.strokeRect(cardX, botY, cardW, cardH);
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 45, botY + 45, 360, 58);
+      ctx.fillStyle = '#FFE600';
+      ctx.font = '800 25px sans-serif';
+      ctx.fillText(`⚡ @${handle.toUpperCase()} REPLIED`, cardX + 65, botY + 83);
+
+      ctx.fillStyle = theme.bottomCardText;
+      ctx.font = '800 48px sans-serif';
+      wrapCanvasText(ctx, reply, cardX + 55, botY + 190, cardW - 110, 66);
+
+      ctx.fillStyle = '#FF1E8E';
+      ctx.fillRect(220, 1680, 640, 106);
+      ctx.strokeRect(220, 1680, 640, 106);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`emous.app/ask/${handle}`, 540, 1745);
+
+      const a = document.createElement('a');
+      a.download = `emous-story-${handle.toLowerCase()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+
+    function renderComposerModal() {
+      if (!state.isComposerOpen) return '';
+      const currentHandle = getCurrentHandle();
+      const compact = isCompactMobile();
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm overflow-y-auto flex items-center justify-center p-2.5">
+          <div class="bg-emous-surface w-full ${compact ? 'max-w-[355px] p-3.5' : 'max-w-md p-5'} rounded-2xl flyer-card space-y-3 my-auto">
+            <div class="flex items-center justify-between gap-2">
+              <span class="bg-emous-lime text-black font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full border-2 border-black truncate">
+                NEW VISUAL CONFESSION CARD
+              </span>
+              <button onclick="state.isComposerOpen = false; render();" class="bg-black text-white px-2.5 py-1 rounded-lg border-2 border-white/20 text-xs font-bold shrink-0">✕</button>
+            </div>
+
+            <form onsubmit="handlePublishPost(event)" class="space-y-3">
+              <div
+                style="${
+                  state.draftBg.type === 'image'
+                    ? `background-image: linear-gradient(to bottom, rgba(13,13,17,0.35), rgba(13,13,17,0.82)), url('${state.draftBg.value}'); background-size: cover; background-position: center;`
+                    : `background: ${state.draftBg.value};`
+                }"
+                class="rounded-2xl p-3.5 flyer-card min-h-[165px] flex flex-col justify-between"
+              >
+                <div class="flex items-center justify-between gap-1.5">
+                  <span class="bg-black/80 text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full truncate max-w-[50%]">
+                    🎭 @${escapeHtml(currentHandle)}
+                  </span>
+                  <button type="button" onclick="handleShuffleComposerBg()" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2.5 py-1 rounded-full border-2 border-black shadow-brutal hover:bg-emous-lime shrink-0">
+                    🎲 Shuffle BG
+                  </button>
+                </div>
+
+                <textarea
+                  rows="3"
+                  maxlength="300"
+                  oninput="state.draftContent = this.value; document.getElementById('draft-char-count').textContent = this.value.length + '/300';"
+                  placeholder="Drop an anonymous confession, unpopular opinion, or local sighting..."
+                  style="color: ${state.draftBg.type === 'image' ? '#FFFFFF' : state.draftBg.textColor}"
+                  class="w-full bg-transparent placeholder:text-current/70 font-sans font-extrabold ${compact ? 'text-sm' : 'text-base'} focus:outline-none resize-none my-2 leading-snug"
+                >${escapeHtml(state.draftContent)}</textarea>
+
+                <div class="flex items-center justify-between text-[10px] font-extrabold">
+                  <span style="background-color: ${state.draftBg.badgeBg}; color: ${state.draftBg.badgeText}" class="px-2 py-0.5 rounded-md border-2 border-black truncate max-w-[70%]">
+                    ${escapeHtml(state.draftTag)}
+                  </span>
+                  <span id="draft-char-count" class="bg-black/75 text-white px-2 py-0.5 rounded-full">${state.draftContent.length}/300</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-extrabold uppercase text-neutral-400 mb-1">Pick a Hashtag Badge:</label>
+                <div class="flex flex-wrap gap-1">
+                  ${POPULAR_TAGS.map(
+                    (t) => `
+                    <button
+                      type="button"
+                      onclick="state.draftTag = '${t}'; render();"
+                      class="text-[10px] font-display font-extrabold px-2 py-1 rounded-lg border-2 border-black ${
+                        state.draftTag === t ? 'bg-emous-pink text-white' : 'bg-black text-neutral-300'
+                      }"
+                    >
+                      ${t}
+                    </button>
+                  `
+                  ).join('')}
+                </div>
+              </div>
+
+              <button type="submit" class="w-full bg-emous-lime text-black font-display font-extrabold text-xs sm:text-sm py-2.5 rounded-xl flyer-btn uppercase">
+                Drop Anonymous Card 🚀
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAskReceiverScreen() {
+      const activeTheme = STORY_THEMES[state.askThemeIndex % STORY_THEMES.length];
+      const compact = isCompactMobile();
+
+      return `
+        <div class="min-h-screen flex flex-col justify-between ${compact ? 'pb-6' : 'pb-24'}">
+          <!-- Top Navigation Header with Quick Actions (+ Create Card & Get My Link) -->
+          <header class="w-full max-w-lg mx-auto px-3 pt-3.5 pb-2 flex items-center justify-between gap-1.5">
+            <button onclick="navigateToMain('feed')" class="inline-flex items-center gap-1.5 bg-emous-lime text-black font-display font-extrabold text-sm px-3 py-1 rounded-full flyer-btn shrink-0">
+              <span>emous</span>
+              <span class="text-[8px] bg-black text-emous-lime px-1.5 py-0.5 rounded-full uppercase">LIVE</span>
+            </button>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="openCardComposer()" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2.5 py-1 rounded-full flyer-btn uppercase">
+                + Drop Card
+              </button>
+              <button onclick="navigateToMain('inbox')" class="bg-emous-pink text-white font-display font-extrabold text-[10px] px-2.5 py-1 rounded-full flyer-btn uppercase">
+                🔗 My Link
+              </button>
+            </div>
+          </header>
+
+          <!-- Main Viral Receiver Card -->
+          <main class="w-full max-w-lg mx-auto px-3 my-auto py-2">
+            <div class="mb-3 text-center">
+              <div class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal mb-2">
+                🤫 SECRET CONFESSION DROPBOX
+              </div>
+
+              <!-- White Header Card: Uses overflow-hidden + max-w-full + responsive text so @Handle NEVER overflows -->
+              <div class="bg-white text-black rounded-2xl p-3 flyer-card overflow-hidden">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-10 h-10 rounded-xl bg-emous-pink border-2 border-black flex items-center justify-center text-white font-display font-extrabold text-xs shadow-brutal shrink-0">
+                    @${escapeHtml(state.askTargetHandle.slice(0, 2).toUpperCase())}
+                  </div>
+                  <div class="text-left min-w-0 flex-1 overflow-hidden">
+                    <p class="text-[9px] font-bold uppercase tracking-wider text-neutral-500 truncate">Zero-Download Secret Link</p>
+                    <div class="font-display font-extrabold ${compact ? 'text-xs' : 'text-sm sm:text-base'} leading-snug text-black flex flex-wrap items-center gap-1">
+                      <span>Ask</span>
+                      <span class="bg-emous-lime px-1.5 py-0.5 rounded border-2 border-black inline-block max-w-full truncate">
+                        @${escapeHtml(state.askTargetHandle)}
+                      </span>
+                      <span>anything!</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${
+              state.askSentSuccess
+                ? `
+              <div class="bg-emous-lime text-black rounded-2xl p-4 flyer-card text-center space-y-3">
+                <div class="w-12 h-12 mx-auto rounded-xl bg-emous-pink text-white border-2 border-black flex items-center justify-center text-xl shadow-brutal">🚀</div>
+                <h2 class="font-display font-extrabold text-lg uppercase">Secret Delivered!</h2>
+                <p class="font-bold text-xs text-neutral-900 max-w-xs mx-auto">
+                  Your message is in <span class="underline">@${escapeHtml(state.askTargetHandle)}</span>'s secret inbox. They'll never know who sent it!
+                </p>
+                <div class="pt-1 grid grid-cols-1 gap-2">
+                  <button onclick="state.askSentSuccess = false; render();" class="bg-white text-black font-display font-extrabold px-4 py-2 rounded-xl flyer-btn text-xs uppercase">
+                    Send Another Secret 🎲
+                  </button>
+                  <button onclick="navigateToMain('inbox')" class="bg-emous-pink text-white font-display font-extrabold px-4 py-2 rounded-xl flyer-btn text-xs uppercase">
+                    Get My Own Inbox Link 🔗
+                  </button>
+                </div>
+              </div>
+            `
+                : `
+              <form onsubmit="handleSendSecretAsk(event)" class="space-y-3">
+                <div style="background-color: ${activeTheme.topCardBg}" class="rounded-2xl p-3.5 flyer-card transition-colors">
+                  <div class="flex items-center justify-between gap-1.5 mb-2">
+                    <span class="bg-black text-emous-yellow text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full truncate">
+                      🔒 Anonymous Note
+                    </span>
+                    <button type="button" onclick="handleShuffleAskIdea()" class="bg-emous-yellow text-black text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal hover:bg-emous-lime shrink-0">
+                      🎲 Shuffle Idea
+                    </button>
+                  </div>
+                  <textarea
+                    rows="3"
+                    maxlength="300"
+                    oninput="state.askQuestion = this.value; document.getElementById('ask-count').textContent = this.value.length + '/300';"
+                    placeholder="Type your deepest secret here... 👀🔥"
+                    style="color: ${activeTheme.topCardText}"
+                    class="w-full bg-black/15 placeholder:text-current/70 rounded-xl p-2.5 font-sans font-bold text-xs sm:text-sm focus:outline-none border-2 border-black/30 resize-none"
+                  >${escapeHtml(state.askQuestion)}</textarea>
+                  <div style="color: ${activeTheme.topCardText}" class="mt-1.5 flex items-center justify-between text-[10px] font-extrabold">
+                    <span>🔥 Auto-burns in 30 days</span>
+                    <span id="ask-count">${state.askQuestion.length}/300</span>
+                  </div>
+                </div>
+                <button type="submit" class="w-full bg-emous-pink hover:bg-[#ff3399] text-white font-display font-extrabold text-sm py-3 px-4 rounded-xl flyer-btn uppercase tracking-wide">
+                  Send Anonymously 🚀
+                </button>
+              </form>
+            `
+            }
+
+            <!-- Quick Action Links inside Receiver View: Create a Card OR Get Your Inbox Link -->
+            <div class="mt-3 grid grid-cols-2 gap-2">
+              <button onclick="openCardComposer()" class="bg-emous-surface text-emous-yellow font-display font-extrabold text-[10px] py-2 px-2.5 rounded-xl border-2 border-black shadow-brutal uppercase text-center truncate">
+                ✨ Create Feed Card
+              </button>
+              <button onclick="navigateToMain('inbox')" class="bg-emous-surface text-emous-lime font-display font-extrabold text-[10px] py-2 px-2.5 rounded-xl border-2 border-black shadow-brutal uppercase text-center truncate">
+                🔗 Create Inbox Link
+              </button>
+            </div>
+          </main>
+
+          <!-- Growth Loop Footer (Stays inside the mobile frame when simulator is active!) -->
+          <footer class="${
+            state.mobileSimulator ? 'mt-3' : 'fixed bottom-0 inset-x-0 z-40'
+          } bg-emous-surface/95 backdrop-blur-md border-t-3 border-black px-3 py-2.5">
+            <div class="max-w-lg mx-auto flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-[10px] font-extrabold text-emous-lime truncate">
+                  ✨ Get your own anonymous link!
+                </p>
+                <p class="text-[9px] text-neutral-300 font-bold truncate">
+                  Handle <span class="text-emous-yellow">@${escapeHtml(state.myHandle)}</span> ready
+                </p>
+              </div>
+              <button onclick="navigateToMain('inbox')" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2.5 py-1.5 rounded-lg flyer-btn uppercase shrink-0">
+                Get My Link 🔗
+              </button>
+            </div>
+          </footer>
+
+          ${renderComposerModal()}
+        </div>
+      `;
+    }
+
+    function renderScrollingTagBar() {
+      const baseTags = ['All', ...POPULAR_TAGS];
+      const marqueeItems = [...baseTags, ...baseTags];
+      const compact = isCompactMobile();
+      return `
+        <div class="tag-marquee-viewport no-scrollbar" title="Hover to pause scrolling tags">
+          <div class="tag-marquee-track">
+            ${marqueeItems
+              .map(
+                (tag) => `
+              <button
+                onclick="handleSelectTag('${tag}')"
+                class="shrink-0 ${compact ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-xs'} rounded-full font-display font-extrabold uppercase flyer-btn ${
+                  state.selectedTag === tag
+                    ? 'bg-emous-yellow text-black'
+                    : 'bg-emous-surface text-white hover:bg-neutral-800'
+                }"
+              >
+                ${tag}
+              </button>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMainApp() {
+      const currentHandle = getCurrentHandle();
+      const activeStoryTheme = STORY_THEMES.find((t) => t.id === state.storyThemeId) || STORY_THEMES[0];
+      const compact = isCompactMobile();
+      const gridColsClass = compact
+        ? 'grid-cols-1 gap-3.5'
+        : 'grid-cols-1 md:grid-cols-2 gap-5';
+
+      return `
+        <div>
+          <!-- Top Streetwear Brand Header -->
+          <header class="sticky top-0 z-30 bg-emous-bg/95 backdrop-blur-md border-b-3 border-black">
+            <div class="max-w-5xl mx-auto px-3 py-2.5 ${
+              compact ? 'space-y-2' : 'flex items-center justify-between gap-3'
+            }">
+              <!-- Logo + Auto-Handle Pill -->
+              <div class="flex items-center justify-between gap-2">
+                <button onclick="navigateToMain('feed')" class="bg-emous-lime text-black font-display font-extrabold ${
+                  compact ? 'text-base px-2.5 py-0.5' : 'text-2xl px-3.5 py-1'
+                } rounded-xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0">
+                  <span>emous</span>
+                  <span class="text-[8px] bg-black text-emous-yellow px-1.5 py-0.5 rounded-full uppercase">MVP</span>
+                </button>
+
+                <div class="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-0.5 min-w-0">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emous-lime animate-pulse shrink-0"></span>
+                  <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[110px]">@${escapeHtml(currentHandle)}</span>
+                  <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[10px] bg-black text-white px-1.5 py-0.5 rounded-full hover:bg-emous-pink shrink-0">
+                    🎲
+                  </button>
+                </div>
+              </div>
+
+              <!-- 3-Column Navigation Tabs: Feed | Inbox Link | + Drop Card -->
+              <div class="grid grid-cols-3 gap-1.5">
+                <button
+                  onclick="navigateToMain('feed')"
+                  class="px-2 py-1.5 rounded-xl font-display font-extrabold text-[10px] uppercase flyer-btn text-center truncate ${
+                    state.activeScreen === 'feed' ? 'bg-emous-pink text-white' : 'bg-emous-surface text-white'
+                  }"
+                >
+                  🔥 Feed
+                </button>
+
+                <button
+                  onclick="navigateToMain('inbox')"
+                  class="px-2 py-1.5 rounded-xl font-display font-extrabold text-[10px] uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
+                    state.activeScreen === 'inbox' ? 'bg-emous-lime text-black' : 'bg-emous-surface text-white'
+                  }"
+                >
+                  <span class="truncate">🔗 Inbox</span>
+                  <span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0">
+                    ${state.inboxMessages.length}
+                  </span>
+                </button>
+
+                <button
+                  onclick="openCardComposer()"
+                  class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2 py-1.5 rounded-xl flyer-btn uppercase text-center truncate"
+                >
+                  + Card
+                </button>
+              </div>
+            </div>
+          </header>
+
+          ${
+            state.activeScreen === 'feed'
+              ? `
+            <!-- SCREEN 1: THE APP HOME FEED -->
+            <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-3.5">
+              <!-- Quick "Create Card / Get Inbox Link" Strip on Mobile so both are always 1 tap away -->
+              <div class="bg-emous-surface rounded-2xl p-3 flyer-card space-y-2.5">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[8px] uppercase px-2 py-0.5 rounded border border-black mb-0.5">
+                      ZERO-LOGIN FEED
+                    </span>
+                    <h1 class="font-display font-extrabold ${compact ? 'text-base' : 'text-xl sm:text-2xl'} text-white leading-tight truncate">
+                      ${state.feedMode === 'global' ? '🌐 Global Tags Feed' : '📍 Near Me (5mi)'}
+                    </h1>
+                  </div>
+
+                  <button
+                    onclick="navigateToMain('inbox')"
+                    class="bg-emous-lime text-black font-display font-extrabold text-[10px] px-2.5 py-1.5 rounded-xl flyer-btn uppercase shrink-0"
+                  >
+                    🔗 Get My Link
+                  </button>
+                </div>
+
+                <!-- Dual-Feed Toggle Switch -->
+                <div class="bg-black p-1 rounded-xl border-2 border-white/15 grid grid-cols-2 w-full">
+                  <button
+                    onclick="handleToggleFeedMode('global')"
+                    class="px-2.5 py-1.5 rounded-lg font-display font-extrabold text-[10px] uppercase transition-all text-center truncate ${
+                      state.feedMode === 'global' ? 'bg-emous-lime text-black shadow-brutal' : 'text-neutral-400 hover:text-white'
+                    }"
+                  >
+                    🌐 Global Tags
+                  </button>
+                  <button
+                    onclick="handleToggleFeedMode('near')"
+                    class="px-2.5 py-1.5 rounded-lg font-display font-extrabold text-[10px] uppercase transition-all text-center truncate ${
+                      state.feedMode === 'near' ? 'bg-emous-pink text-white shadow-brutal' : 'text-neutral-400 hover:text-white'
+                    }"
+                  >
+                    📍 Near Me (5mi)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Auto-Scrolling Streetwear Hashtag Ticker Bar -->
+              ${renderScrollingTagBar()}
+
+              <!-- Visual Cards Grid -->
+              <div class="grid ${gridColsClass}">
+                ${state.posts
+                  .map((post) => {
+                    const isImage = post.background?.type === 'image';
+                    const bgStyle = isImage
+                      ? `background-image: linear-gradient(to bottom, rgba(13,13,17,0.35), rgba(13,13,17,0.82)), url('${post.background.value}'); background-size: cover; background-position: center;`
+                      : `background: ${post.background?.value || 'linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)'};`;
+                    const textColor = isImage ? '#FFFFFF' : post.background?.textColor || '#FFFFFF';
+                    const cleanTagLabel = String(post.tag || '#Confessions').replace(/^#/, '');
+                    const reportLabel = post.flagsCount > 0 ? `Report (${post.flagsCount}/3)` : 'Report';
+
+                    return `
+                    <article style="${bgStyle}" class="rounded-2xl p-3.5 sm:p-5 flyer-card flex flex-col justify-between min-h-[185px] relative overflow-hidden">
+                      <div class="flex items-center justify-between gap-1.5 min-w-0">
+                        <button onclick="navigateToAsk('${escapeHtml(post.authorHandle)}')" class="bg-black/85 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full border-2 border-black hover:bg-emous-pink truncate max-w-[55%]">
+                          🎭 @${escapeHtml(post.authorHandle)}
+                        </button>
+                        <div class="flex items-center gap-1 shrink-0">
+                          ${
+                            post.distanceMiles !== undefined || post.location?.label
+                              ? `<span class="bg-black/80 text-emous-lime text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-black">
+                                  📍 ${post.distanceMiles !== undefined ? post.distanceMiles + 'mi' : escapeHtml(post.location?.label)}
+                                </span>`
+                              : ''
+                          }
+                          <span class="bg-emous-yellow text-black text-[9px] font-extrabold px-2 py-0.5 rounded-full border-2 border-black">
+                            ${formatRelativeTime(post.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p style="color: ${textColor}" class="my-3.5 font-sans font-extrabold ${
+                        compact ? 'text-sm leading-snug' : 'text-base sm:text-lg leading-relaxed'
+                      } tracking-tight break-words">
+                        “${escapeHtml(post.content)}”
+                      </p>
+
+                      <!-- Icon-Only Action Pills -->
+                      <div class="flex items-center justify-between gap-1.5 pt-1">
+                        <button
+                          onclick="handleSelectTag('${escapeHtml(post.tag)}')"
+                          style="background-color: ${post.background?.badgeBg || '#CCFF00'}; color: ${post.background?.badgeText || '#0D0D11'}"
+                          class="card-action-pill"
+                          aria-label="Filter by ${escapeHtml(post.tag)}"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="4" x2="20" y1="9" y2="9"/>
+                            <line x1="4" x2="20" y1="15" y2="15"/>
+                            <line x1="10" x2="8" y1="3" y2="21"/>
+                            <line x1="16" x2="14" y1="3" y2="21"/>
+                          </svg>
+                          <span class="card-action-label">${escapeHtml(cleanTagLabel)}</span>
+                        </button>
+
+                        <div class="flex items-center gap-1.5">
+                          <button
+                            onclick="navigateToAsk('${escapeHtml(post.authorHandle)}')"
+                            class="card-action-pill bg-white text-black hover:bg-emous-lime"
+                            aria-label="Ask Secret"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+                            </svg>
+                            <span class="card-action-label">Ask Secret</span>
+                          </button>
+
+                          <button
+                            onclick="handleFlagPost('${post._id}')"
+                            class="card-action-pill ${
+                              post.isFlaggedByMe ? 'bg-emous-pink text-white' : 'bg-black/85 text-white hover:bg-red-600'
+                            }"
+                            aria-label="Report Post"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5] ${post.isFlaggedByMe ? 'text-white' : 'text-emous-pink'}" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                              <line x1="4" x2="4" y1="22" y2="15"/>
+                            </svg>
+                            <span class="card-action-label">${escapeHtml(reportLabel)}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  `;
+                  })
+                  .join('')}
+              </div>
+            </main>
+          `
+              : `
+            <!-- SCREEN 2: "GET YOUR LINK" DASHBOARD -->
+            <main class="max-w-4xl mx-auto px-3 pt-3.5 space-y-4">
+              <div class="bg-emous-lime text-black rounded-2xl p-4 flyer-card space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                  <span class="inline-block bg-black text-emous-yellow text-[9px] font-display font-extrabold px-2 py-0.5 rounded-full uppercase">
+                    ✨ VIRAL ANONYMOUS INBOX
+                  </span>
+                  <button onclick="handleToggleDemoHandle()" class="bg-white text-black text-[10px] font-extrabold px-2.5 py-1 rounded-lg border-2 border-black shadow-brutal">
+                    ${state.demoGoldenWizard ? `👤 My Handle (@${escapeHtml(state.myHandle)})` : '🧙‍♂️ @GoldenWizard Demo'}
+                  </button>
+                </div>
+
+                <h1 class="font-display font-extrabold ${compact ? 'text-base' : 'text-xl sm:text-2xl'} leading-tight">
+                  🤫 Drop your link on your socials & get anonymous confessions!
+                </h1>
+
+                <div class="bg-white rounded-xl p-2.5 border-2 border-black shadow-brutal space-y-2">
+                  <div class="flex items-center gap-1.5 overflow-hidden">
+                    <span class="bg-emous-pink text-white font-display font-extrabold text-[9px] px-1.5 py-0.5 rounded border border-black shrink-0">LINK</span>
+                    <span class="font-display font-extrabold text-xs text-black truncate">
+                      emous.app/ask/${escapeHtml(currentHandle)}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button onclick="handleCopyLink()" class="bg-emous-pink text-white font-display font-extrabold text-[10px] py-2 px-2 rounded-lg flyer-btn uppercase text-center truncate">
+                      🔗 Copy Link
+                    </button>
+                    <button onclick="navigateToAsk('${escapeHtml(currentHandle)}')" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] py-2 px-2 rounded-lg flyer-btn uppercase text-center truncate">
+                      🚀 Open Link
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Secret Notes Inbox Grid -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h2 class="font-display font-extrabold text-sm sm:text-lg flex items-center gap-1.5">
+                    <span>🕵️ Secret Notes (@${escapeHtml(currentHandle)})</span>
+                    <span class="bg-emous-yellow text-black text-[10px] px-2 py-0.5 rounded-full border-2 border-black">${state.inboxMessages.length}</span>
+                  </h2>
+                  <button onclick="openCardComposer()" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2.5 py-1 rounded-lg flyer-btn uppercase">
+                    + New Feed Card
+                  </button>
+                </div>
+
+                <div class="grid ${gridColsClass}">
+                  ${state.inboxMessages
+                    .map((msg) => {
+                      const pair = STORY_THEMES.find((t) => t.id === msg.themeId) || STORY_THEMES[0];
+                      return `
+                      <div class="bg-emous-surface rounded-2xl p-3.5 flyer-card flex flex-col justify-between gap-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                          <span style="background-color: ${msg.isRead ? '#FFE600' : '#FF1E8E'}; color: ${msg.isRead ? '#0D0D11' : '#FFFFFF'}" class="text-[9px] font-display font-extrabold uppercase px-2 py-0.5 rounded-full border-2 border-black">
+                            ${msg.isRead ? '✉️ Opened' : '🔥 New Secret'}
+                          </span>
+                          <span class="text-[10px] font-bold text-neutral-400">${formatRelativeTime(msg.createdAt)} • 30d burn</span>
+                        </div>
+
+                        <div style="background-color: ${pair.topCardBg}; color: ${pair.topCardText}" class="rounded-xl p-3 border-2 border-black shadow-brutal font-sans font-extrabold text-xs sm:text-sm leading-snug">
+                          “${escapeHtml(msg.question)}”
+                        </div>
+
+                        ${
+                          msg.reply
+                            ? `
+                          <div style="background-color: ${pair.bottomCardBg}; color: ${pair.bottomCardText}" class="rounded-xl p-2.5 border-2 border-black text-xs font-bold">
+                            <span class="block text-[8px] uppercase font-extrabold opacity-75 mb-0.5">Your Story Reply:</span>
+                            ${escapeHtml(msg.reply)}
+                          </div>
+                        `
+                            : ''
+                        }
+
+                        <div class="flex items-center justify-between gap-2 pt-0.5">
+                          <button onclick="handleOpenStoryModal('${msg._id}')" class="flex-1 bg-emous-lime text-black font-display font-extrabold text-[10px] py-2 px-3 rounded-xl flyer-btn uppercase">
+                            📸 ${msg.reply ? 'Share 9:16 Story' : 'Reply & Share Story'}
+                          </button>
+                          <button onclick="handleFlagInbox('${msg._id}')" class="card-action-pill bg-black text-neutral-300 hover:bg-red-600 hover:text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 text-emous-pink" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+                              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                              <line x1="4" x2="4" y1="22" y2="15"/>
+                            </svg>
+                            <span class="card-action-label">Report</span>
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                    })
+                    .join('')}
+                </div>
+              </div>
+            </main>
+          `
+          }
+
+          ${renderComposerModal()}
+
+          <!-- SCREEN 4: 9:16 INSTAGRAM / SNAPCHAT STORY SHARE GENERATOR MODAL -->
+          ${
+            state.activeStoryMsg
+              ? `
+            <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 overflow-y-auto">
+              <div class="bg-emous-surface w-full ${
+                compact ? 'max-w-[355px] p-3.5 grid-cols-1' : 'max-w-2xl p-6 grid-cols-1 md:grid-cols-2'
+              } rounded-2xl flyer-card grid gap-4 items-center my-auto">
+                <div class="flex justify-center">
+                  <div style="background-color: ${activeStoryTheme.canvasBg}" class="w-[215px] h-[382px] rounded-2xl p-3 flyer-card flex flex-col justify-between relative overflow-hidden">
+                    <div class="text-center">
+                      <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[8px] uppercase px-2 py-0.5 rounded border-2 border-black shadow-brutal">
+                        ASK @${escapeHtml(currentHandle)}
+                      </span>
+                    </div>
+
+                    <div style="background-color: ${activeStoryTheme.topCardBg}; color: ${activeStoryTheme.topCardText}" class="rounded-xl p-2.5 border-2 border-black shadow-brutal space-y-1">
+                      <span class="inline-block bg-black text-emous-lime text-[7px] font-extrabold uppercase px-1.5 py-0.5 rounded">
+                        🤫 ANONYMOUS CONFESSION
+                      </span>
+                      <p class="font-sans font-extrabold text-xs leading-snug">
+                        “${escapeHtml(state.activeStoryMsg.question)}”
+                      </p>
+                    </div>
+
+                    <div style="background-color: ${activeStoryTheme.bottomCardBg}; color: ${activeStoryTheme.bottomCardText}" class="rounded-xl p-2.5 border-2 border-black shadow-brutal space-y-1">
+                      <span class="inline-block bg-black text-emous-yellow text-[7px] font-extrabold uppercase px-1.5 py-0.5 rounded">
+                        ⚡ @${escapeHtml(currentHandle)} REPLIED
+                      </span>
+                      <p id="story-live-reply-preview" class="font-sans font-extrabold text-xs leading-snug">
+                        ${escapeHtml(state.replyText.trim() || 'Type your comeback below... 👀')}
+                      </p>
+                    </div>
+
+                    <div class="text-center">
+                      <span class="inline-block bg-emous-pink text-white font-display font-extrabold text-[8px] px-2 py-0.5 rounded-full border-2 border-black">
+                        emous.app/ask/${escapeHtml(currentHandle)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <span class="text-[9px] font-extrabold uppercase text-emous-lime">9:16 STORY GENERATOR</span>
+                      <h3 class="font-display font-extrabold text-base">Reply & Share to Story</h3>
+                    </div>
+                    <button onclick="state.activeStoryMsg = null; render();" class="bg-black text-white px-2.5 py-1 rounded-lg border-2 border-white/20 text-xs font-bold">✕</button>
+                  </div>
+
+                  <div>
+                    <textarea
+                      rows="2"
+                      maxlength="300"
+                      oninput="state.replyText = this.value; document.getElementById('story-live-reply-preview').textContent = this.value.trim() || 'Type your comeback below... 👀';"
+                      placeholder="Type your response for the bottom card..."
+                      class="w-full bg-black text-white rounded-xl p-2.5 border-2 border-white/25 font-sans font-bold text-xs focus:outline-none focus:border-emous-lime resize-none"
+                    >${escapeHtml(state.replyText)}</textarea>
+                  </div>
+
+                  <div class="flex flex-wrap gap-1">
+                    ${STORY_THEMES.map(
+                      (pair) => `
+                      <button
+                        type="button"
+                        onclick="state.storyThemeId = '${pair.id}'; render();"
+                        class="px-2 py-1 rounded-lg text-[10px] font-extrabold border-2 border-black ${
+                          state.storyThemeId === pair.id ? 'bg-emous-yellow text-black shadow-brutal' : 'bg-black text-neutral-300'
+                        }"
+                      >
+                        ${pair.name}
+                      </button>
+                    `
+                    ).join('')}
+                  </div>
+
+                  <div class="pt-1 space-y-1.5">
+                    <button onclick="handleSaveStoryReply(true)" class="w-full bg-emous-pink text-white font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase">
+                      📸 Download 9:16 Story PNG
+                    </button>
+                    <button onclick="handleSaveStoryReply(false)" class="w-full bg-emous-lime text-black font-display font-extrabold text-[10px] py-2 px-3 rounded-xl flyer-btn uppercase">
+                      Save Reply Only
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+              : ''
+          }
+        </div>
+      `;
+    }
+
+    function render() {
+      const root = document.getElementById('app');
+      if (!root) return;
+
+      const toastHtml = state.toast
+        ? `<div class="fixed top-3 right-3 left-3 sm:left-auto z-50 bg-emous-lime text-black font-display font-extrabold text-xs px-4 py-2.5 rounded-xl flyer-card text-center">${escapeHtml(state.toast)}</div>`
+        : '';
+
+      const simulatorToggleHtml = `
+        <div class="hidden md:flex fixed bottom-5 right-5 z-50 items-center gap-2">
+          <button
+            onclick="state.mobileSimulator = !state.mobileSimulator; render();"
+            class="bg-emous-yellow text-black font-display font-extrabold text-xs px-4 py-2.5 rounded-2xl flyer-btn uppercase flex items-center gap-2"
+          >
+            <span>${state.mobileSimulator ? '🖥️ Full Web View' : '📱 Mobile App Frame'}</span>
+          </button>
+        </div>
+      `;
+
+      const pageContent = state.route === 'ask' ? renderAskReceiverScreen() : renderMainApp();
+      root.innerHTML =
+        toastHtml +
+        simulatorToggleHtml +
+        (state.mobileSimulator
+          ? `<div class="py-4 px-2 flex justify-center"><div class="w-[375px] max-w-full border-[5px] border-black rounded-[36px] shadow-2xl overflow-hidden bg-emous-bg relative">${pageContent}</div></div>`
+          : pageContent);
+    }
+
+    initApp();
+  </script>
+</body>
+</html>

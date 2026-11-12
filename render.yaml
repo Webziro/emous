@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: emous-unified-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: PUBLIC_DOMAIN
+        value: emous.app
+      - key: MONGODB_URI
+        sync: false
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false

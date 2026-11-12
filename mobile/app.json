@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "emous",
+    "slug": "emous",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0D0D11",
+    "primaryColor": "#FF1E8E",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.emous.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "emous uses your location to show anonymous confessions within a 5-mile radius."
+      }
+    },
+    "android": {
+      "package": "app.emous.mobile",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}

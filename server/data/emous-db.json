@@ -1,0 +1,480 @@
+{
+  "users": [
+    {
+      "_id": "6c1861f344e64fd584023610",
+      "deviceId": "demo-device-goldenwizard",
+      "handle": "GoldenWizard",
+      "handleLower": "goldenwizard",
+      "createdAt": "2026-10-28T17:16:26.941Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "aebe689c0b984424912ac145",
+      "deviceId": "demo-device-neonpanther",
+      "handle": "NeonPanther",
+      "handleLower": "neonpanther",
+      "createdAt": "2026-10-28T17:16:26.941Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "2d0405c0527d40e2a96e47a6",
+      "deviceId": "demo-device-acidrebel",
+      "handle": "AcidRebel",
+      "handleLower": "acidrebel",
+      "createdAt": "2026-10-28T17:16:26.941Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "87f554ccfdc3402a8bb8cec4",
+      "deviceId": "demo-device-cyberviper",
+      "handle": "CyberViper",
+      "handleLower": "cyberviper",
+      "createdAt": "2026-10-28T17:16:26.941Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "47e995cc92364541aa886b05",
+      "deviceId": "test-fingerprint-001",
+      "handle": "CrimsonComet",
+      "handleLower": "crimsoncomet",
+      "createdAt": "2026-10-28T17:16:27.230Z",
+      "updatedAt": "2026-10-28T17:16:27.230Z"
+    },
+    {
+      "_id": "2dcd54bed6ac45c39239ff19",
+      "deviceId": "web-3pbdu13r-mwbqrp0x",
+      "handle": "HyperRaven",
+      "handleLower": "hyperraven",
+      "createdAt": "2026-11-11T06:32:15.752Z",
+      "updatedAt": "2026-11-12T12:50:18.198Z"
+    }
+  ],
+  "posts": [
+    {
+      "_id": "67cba7cb7ab04c768c0d68f8",
+      "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "authorHandle": "GoldenWizard",
+      "content": "I am the most lite student in the campus, but you all are'nt ready for this conversation",
+      "tag": "#CampusTea",
+      "tagLower": "#campustea",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-12T17:28:09.006Z",
+      "updatedAt": "2026-11-12T17:28:09.006Z"
+    },
+    {
+      "_id": "83f7f9fb615747609dc0f9d1",
+      "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "authorHandle": "HyperRaven",
+      "content": "Women find things easier than men, but men have more than advantage women",
+      "tag": "#UnpopularOpinion",
+      "tagLower": "#unpopularopinion",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-12T12:51:34.276Z",
+      "updatedAt": "2026-11-12T12:51:34.276Z"
+    },
+    {
+      "_id": "c947ebb724eb467c82137cc1",
+      "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "authorHandle": "GoldenWizard",
+      "content": "I have a confession to make. HR is so beautiful; anytime she speaks i rearly pay  #workconfessions",
+      "tag": "#WorkConfessions",
+      "tagLower": "#workconfessions",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-11T06:49:06.159Z",
+      "updatedAt": "2026-11-11T06:49:06.159Z"
+    },
+    {
+      "_id": "c5f6927981b448caa7622321",
+      "authorDeviceId": "test-fingerprint-001",
+      "authorHandle": "CrimsonComet",
+      "content": "Testing hyperlocal 5-mile confession from downtown! 🔥",
+      "tag": "#WorkConfessions",
+      "tagLower": "#workconfessions",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "flagsCount": 3,
+      "flaggedBy": [
+        "flagger-user-1",
+        "flagger-user-2",
+        "flagger-user-3"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-10-28T17:16:27.263Z",
+      "updatedAt": "2026-10-28T17:16:27.317Z"
+    },
+    {
+      "_id": "7483d1131dc3431b9cbb89d0",
+      "authorDeviceId": "demo-device-goldenwizard",
+      "authorHandle": "GoldenWizard",
+      "content": "Told my boss my Wi-Fi crashed during the 4PM standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫",
+      "tag": "#WorkConfessions",
+      "tagLower": "#workconfessions",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "0.4 mi away"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T17:08:26.941Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "46f3d88524624eb8bede4a26",
+      "authorDeviceId": "demo-device-neonpanther",
+      "authorHandle": "NeonPanther",
+      "content": "Whoever was wearing the vintage neon green puffer at the 2AM warehouse set last night... we locked eyes 3 times. Drop a sign 👀⚡",
+      "tag": "#NightOut",
+      "tagLower": "#nightout",
+      "background": {
+        "id": "img-concert-laser",
+        "type": "image",
+        "name": "Warehouse Rave Lasers",
+        "value": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80",
+        "colors": [
+          "#1F1C2C",
+          "#FF0055"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#FF1E8E",
+        "badgeText": "#FFFFFF",
+        "attribution": "Unsplash / Aditya Chinchure"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -73.998,
+          40.7205
+        ],
+        "label": "1.1 mi away"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T16:52:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "df8083313ba241688ab3eae8",
+      "authorDeviceId": "demo-device-acidrebel",
+      "authorHandle": "AcidRebel",
+      "content": "Unpopular opinion: 3AM diner fries with the squad hit 100x harder than any $200 reservation spot in the city.",
+      "tag": "#UnpopularOpinion",
+      "tagLower": "#unpopularopinion",
+      "background": {
+        "id": "grad-acid-lime",
+        "type": "gradient",
+        "name": "Acid Lime Flyer",
+        "value": "linear-gradient(135deg, #CCFF00 0%, #00E5A3 100%)",
+        "colors": [
+          "#CCFF00",
+          "#00E5A3"
+        ],
+        "textColor": "#0D0D11",
+        "badgeBg": "#FF1E8E",
+        "badgeText": "#FFFFFF"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.012,
+          40.708
+        ],
+        "label": "0.8 mi away"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T16:29:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "c08d2bf9181a4dad83c92726",
+      "authorDeviceId": "demo-device-cyberviper",
+      "authorHandle": "CyberViper",
+      "content": "Our entire group project got an A+ and none of us know who actually wrote the final 6 slides on the Google Doc 💀",
+      "tag": "#CampusTea",
+      "tagLower": "#campustea",
+      "background": {
+        "id": "img-neon-alley",
+        "type": "image",
+        "name": "Neon Streetwear Alley",
+        "value": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=900&q=80",
+        "colors": [
+          "#120458",
+          "#FF1E8E"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11",
+        "attribution": "Unsplash / Urban Night"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -73.989,
+          40.7308
+        ],
+        "label": "1.9 mi away"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T15:41:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "97ec634ccec5418aaad158f8",
+      "authorDeviceId": "demo-device-goldenwizard",
+      "authorHandle": "GoldenWizard",
+      "content": "I still have a playlist secretly named after someone I talked to for literally 2 weeks back in October.",
+      "tag": "#CrushAlert",
+      "tagLower": "#crushalert",
+      "background": {
+        "id": "grad-midnight-rave",
+        "type": "gradient",
+        "name": "Midnight Rave",
+        "value": "linear-gradient(135deg, #120458 0%, #FF1E8E 100%)",
+        "colors": [
+          "#120458",
+          "#FF1E8E"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#FFE600",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.001,
+          40.718
+        ],
+        "label": "0.6 mi away"
+      },
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T14:56:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    }
+  ],
+  "inbox": [
+    {
+      "_id": "021295d2c9d84766b13821c8",
+      "recipientHandle": "ElectricFalcon",
+      "recipientHandleLower": "electricfalcon",
+      "senderDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "question": "Hello electron, who are you?",
+      "themeId": "story-pink-lime",
+      "isRead": true,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-11T08:36:02.423Z",
+      "updatedAt": "2026-11-12T12:39:45.098Z",
+      "reply": "I am the one called electron. Just electron. What else?",
+      "repliedAt": "2026-11-12T12:39:45.098Z"
+    },
+    {
+      "_id": "78c2394461a1464fabfe4c85",
+      "recipientHandle": "CyberViper",
+      "recipientHandleLower": "cyberviper",
+      "senderDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "question": "Who is the most intelligent in the group?",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-11T06:52:57.574Z",
+      "updatedAt": "2026-11-11T06:52:57.574Z"
+    },
+    {
+      "_id": "853deccd9a314b16b39bf243",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "question": "This is my second anonymous",
+      "themeId": "story-lime-white",
+      "isRead": true,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-11T06:35:31.858Z",
+      "updatedAt": "2026-11-11T06:43:17.534Z",
+      "reply": "Thank you for sending",
+      "repliedAt": "2026-11-11T06:43:17.534Z"
+    },
+    {
+      "_id": "1a002fa8ae7d414c87637ace",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "question": "Hello, who are you?",
+      "themeId": "story-lime-white",
+      "isRead": true,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-11T06:35:15.783Z",
+      "updatedAt": "2026-11-11T06:42:47.782Z",
+      "reply": "I am the emours",
+      "repliedAt": "2026-11-11T06:42:47.782Z"
+    },
+    {
+      "_id": "465ad7cd0dba4e3a8ec8d64f",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Who is your secret crush at the studio? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": true,
+      "flagsCount": 1,
+      "flaggedBy": [
+        "web-3pbdu13r-mwbqrp0x"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-10-28T17:16:27.336Z",
+      "updatedAt": "2026-11-11T07:10:37.178Z",
+      "reply": "Never telling 🤫🔥",
+      "repliedAt": "2026-10-28T17:16:27.351Z"
+    },
+    {
+      "_id": "4b263a8dfc7844aa8f90da1d",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Be honest... who at the Friday hangout were you actually hoping would show up? 👀🔥",
+      "reply": "Nice try lol, if they see this story they already know who they are 🤫✨",
+      "repliedAt": "2026-10-28T17:01:26.942Z",
+      "themeId": "story-pink-lime",
+      "isRead": true,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T16:46:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "4fc4e099f7d34b6caeaae3d2",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Your Spotify playlists are elite. Drop your top late-night drive track right now 🎧",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-10-28T17:04:26.942Z",
+      "updatedAt": "2026-10-28T17:16:26.941Z"
+    },
+    {
+      "_id": "fbb28172c1f740b996deeb19",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Lowkey had a crush on you since the studio session in September ngl 🫣",
+      "themeId": "story-lime-white",
+      "isRead": true,
+      "flagsCount": 1,
+      "flaggedBy": [
+        "web-3pbdu13r-mwbqrp0x"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-10-28T17:12:26.942Z",
+      "updatedAt": "2026-11-11T07:10:41.351Z",
+      "reply": "i actually did love her and you could see her big booty",
+      "repliedAt": "2026-11-11T06:46:22.051Z"
+    }
+  ]
+}

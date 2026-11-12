@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/ask/:handle",
+      "destination": "/ask/:handle"
+    }
+  ]
+}
