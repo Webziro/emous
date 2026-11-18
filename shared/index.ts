@@ -290,6 +290,26 @@ export function generateRandomHandle(withNumber = false): string {
   return `${adj}${noun}`;
 }
 
+export const REACTION_TYPES = ['fire', 'skull', 'eyes', 'heart'] as const;
+export type ReactionType = (typeof REACTION_TYPES)[number];
+
+export const REACTION_META: Record<
+  ReactionType,
+  { emoji: string; label: string }
+> = {
+  fire: { emoji: '🔥', label: 'Fire' },
+  skull: { emoji: '💀', label: 'Dead' },
+  eyes: { emoji: '👀', label: 'Tea' },
+  heart: { emoji: '❤️', label: 'Real' },
+};
+
+export interface ReactionCounts {
+  fire: number;
+  skull: number;
+  eyes: number;
+  heart: number;
+}
+
 export interface UserIdentityDTO {
   deviceId: string;
   handle: string;
@@ -309,6 +329,8 @@ export interface PostDTO {
     label?: string;
   };
   distanceMiles?: number;
+  reactions: ReactionCounts;
+  myReactions: ReactionType[];
   flagsCount: number;
   isFlaggedByMe?: boolean;
   isHidden: boolean;

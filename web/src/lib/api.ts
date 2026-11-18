@@ -6,6 +6,8 @@ import {
   InboxMessageDTO,
   POPULAR_TAGS,
   PostDTO,
+  ReactionCounts,
+  ReactionType,
   UserIdentityDTO,
 } from '@shared/index';
 
@@ -175,6 +177,29 @@ export async function createPost(payload: {
   }
   const data = await res.json();
   return data.post;
+}
+
+export async function reactToPost(
+  postId: string,
+  type: ReactionType
+): Promise<{
+  _id: string;
+  type: ReactionType;
+  action: 'added' | 'removed';
+  reactions: ReactionCounts;
+  myReactions: ReactionType[];
+}> {
+  const deviceId = getOrCreateDeviceId();
+  const res = await fetch(`${API_BASE}/posts/${postId}/react`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-device-id': deviceId,
+    },
+    body: JSON.stringify({ deviceId, type }),
+  });
+  if (!res.ok) throw new Error('Failed to react to post');
+  return res.json();
 }
 
 export async function flagPost(postId: string): Promise<{

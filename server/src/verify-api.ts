@@ -75,6 +75,39 @@ async function runVerification() {
     const createdPostId = createdPostData.post._id;
     assert.ok(createdPostId);
 
+    // 4b. Phase 4: Emoji Reactions Toggle (🔥 fire)
+    const reactRes = await fetch(`${baseUrl}/posts/${createdPostId}/react`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': 'test-fingerprint-001',
+      },
+      body: JSON.stringify({ type: 'fire' }),
+    });
+    const reactData = await reactRes.json();
+    assert.strictEqual(reactData.reactions.fire, 1);
+    assert.ok(reactData.myReactions.includes('fire'));
+    console.log('✅ 4b. Phase 4 Emoji Reactions (🔥, 💀, 👀, ❤️) verified.');
+
+    // 4c. Phase 4: Safety Shield & Doxxing/Profanity Filter
+    const doxRes = await fetch(`${baseUrl}/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': 'test-fingerprint-001',
+      },
+      body: JSON.stringify({
+        content: 'Call this private number 555-234-5678 right now',
+        tag: '#CampusTea',
+      }),
+    });
+    assert.strictEqual(
+      doxRes.status,
+      400,
+      'Safety Shield must block phone number doxxing'
+    );
+    console.log('✅ 4c. Phase 4 Safety Shield (anti-doxxing & profanity filter) verified.');
+
     // Query Near Me within 5 miles of (40.7128, -74.006)
     const nearRes = await fetch(
       `${baseUrl}/posts?mode=near&lat=40.7128&lng=-74.006&radiusMiles=5`

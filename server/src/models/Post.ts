@@ -13,6 +13,18 @@ export interface IPost extends Document {
     coordinates: [number, number]; // [longitude, latitude]
     label?: string;
   };
+  reactions: {
+    fire: number;
+    skull: number;
+    eyes: number;
+    heart: number;
+  };
+  reactedBy: {
+    fire: string[];
+    skull: string[];
+    eyes: string[];
+    heart: string[];
+  };
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -71,6 +83,18 @@ const PostSchema = new Schema<IPost>(
       label: {
         type: String,
       },
+    },
+    reactions: {
+      fire: { type: Number, default: 0 },
+      skull: { type: Number, default: 0 },
+      eyes: { type: Number, default: 0 },
+      heart: { type: Number, default: 0 },
+    },
+    reactedBy: {
+      fire: { type: [String], default: [] },
+      skull: { type: [String], default: [] },
+      eyes: { type: [String], default: [] },
+      heart: { type: [String], default: [] },
     },
     flagsCount: {
       type: Number,

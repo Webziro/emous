@@ -6,11 +6,19 @@ import {
   isUsingMongo,
   localStore,
   purgeExpiredInboxMessages,
+  reloadLocalStoreFromDiskIfNeeded,
   saveLocalStore,
 } from '../db';
+import { createRateLimiter, inspectAndSanitizeText } from '../safety';
 import { BRAND, STORY_COLOR_PAIRS } from '../../../shared';
 
 export const inboxRouter = Router();
+
+const inboxSendLimiter = createRateLimiter({
+  action: 'secret message',
+  maxRequests: 10,
+  windowMs: 60 * 1000, // Max 10 secret messages per minute per sender
+});
 
 function formatInboxMessage(doc: any) {
   const createdMs = new Date(doc.createdAt).getTime();
@@ -78,6 +86,7 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
     }
 
     // Local Store Engine (runs 30-day TTL auto-burn sweep on read)
+    reloadLocalStoreFromDiskIfNeeded();
     purgeExpiredInboxMessages();
 
     if (!targetHandleLower && deviceId) {
@@ -118,28 +127,41 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/inbox/:handle
+ * Includes Automated Safety / Profanity Filter + Anti-Spam Rate Limiting
  */
-inboxRouter.post('/:handle', async (req: Request, res: Response) => {
-  try {
-    const rawHandle = (req.params.handle || '').trim();
-    const rawQuestion = (req.body?.question as string) || '';
-    const question = rawQuestion.trim();
-    const senderDeviceId =
-      (req.body?.deviceId as string) ||
-      (req.headers['x-device-id'] as string) ||
-      undefined;
+inboxRouter.post(
+  '/:handle',
+  inboxSendLimiter,
+  async (req: Request, res: Response) => {
+    try {
+      const rawHandle = (req.params.handle || '').trim();
+      const rawQuestion = (req.body?.question as string) || '';
+      const trimmedQuestion = rawQuestion.trim();
+      const senderDeviceId =
+        (req.body?.deviceId as string) ||
+        (req.headers['x-device-id'] as string) ||
+        undefined;
 
-    if (!rawHandle) {
-      return res.status(400).json({ error: 'Recipient handle is required.' });
-    }
-    if (!question) {
-      return res.status(400).json({ error: 'Please type a secret message first!' });
-    }
-    if (question.length > BRAND.maxPostLength) {
-      return res.status(400).json({
-        error: `Secret message must be ${BRAND.maxPostLength} characters or less.`,
-      });
-    }
+      if (!rawHandle) {
+        return res.status(400).json({ error: 'Recipient handle is required.' });
+      }
+      if (!trimmedQuestion) {
+        return res
+          .status(400)
+          .json({ error: 'Please type a secret message first!' });
+      }
+      if (trimmedQuestion.length > BRAND.maxPostLength) {
+        return res.status(400).json({
+          error: `Secret message must be ${BRAND.maxPostLength} characters or less.`,
+        });
+      }
+
+      // Run Automated Safety & Profanity Shield
+      const safetyCheck = inspectAndSanitizeText(trimmedQuestion);
+      if (!safetyCheck.allowed) {
+        return res.status(400).json({ error: safetyCheck.reason });
+      }
+      const question = safetyCheck.sanitizedText;
 
     const requestedTheme = req.body?.themeId;
     const randomTheme =
@@ -170,6 +192,7 @@ inboxRouter.post('/:handle', async (req: Request, res: Response) => {
       });
     }
 
+    reloadLocalStoreFromDiskIfNeeded();
     const existingUser = localStore.users.find(
       (u) => u.handleLower === rawHandle.toLowerCase()
     );
@@ -243,6 +266,7 @@ inboxRouter.patch('/:id/reply', async (req: Request, res: Response) => {
       return res.json({ message: formatInboxMessage(updated) });
     }
 
+    reloadLocalStoreFromDiskIfNeeded();
     const msg = localStore.inbox.find((m) => m._id === messageId);
     if (!msg) {
       return res.status(404).json({ error: 'Inbox message not found.' });
@@ -296,6 +320,7 @@ inboxRouter.post('/:id/flag', async (req: Request, res: Response) => {
       });
     }
 
+    reloadLocalStoreFromDiskIfNeeded();
     const msg = localStore.inbox.find((m) => m._id === messageId);
     if (!msg) {
       return res.status(404).json({ error: 'Inbox message not found.' });

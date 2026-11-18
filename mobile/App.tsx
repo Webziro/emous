@@ -31,6 +31,9 @@ import {
   InboxMessageDTO,
   POPULAR_TAGS,
   PostDTO,
+  REACTION_META,
+  REACTION_TYPES,
+  ReactionType,
   STORY_COLOR_PAIRS,
   UserIdentityDTO,
 } from '../shared';
@@ -40,6 +43,7 @@ import {
   fetchMobilePosts,
   flagMobilePost,
   initMobileIdentity,
+  reactMobilePost,
   saveMobileInboxReply,
   shuffleMobileBackground,
 } from './src/api';
@@ -446,6 +450,65 @@ export default function App() {
                     >
                       “{post.content}”
                     </Text>
+
+                    {/* Phase 4: Emoji Reactions Row (🔥, 💀, 👀, ❤️) */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        gap: 6,
+                        marginBottom: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {REACTION_TYPES.map((type: ReactionType) => {
+                        const meta = REACTION_META[type];
+                        const count = post.reactions?.[type] ?? 0;
+                        const active = post.myReactions?.includes(type);
+                        return (
+                          <TouchableOpacity
+                            key={type}
+                            onPress={async () => {
+                              try {
+                                const res = await reactMobilePost(
+                                  post._id,
+                                  type
+                                );
+                                setPosts((prev) =>
+                                  prev.map((p) =>
+                                    p._id === post._id
+                                      ? {
+                                          ...p,
+                                          reactions: res.reactions,
+                                          myReactions: res.myReactions,
+                                        }
+                                      : p
+                                  )
+                                );
+                              } catch {}
+                            }}
+                            style={[
+                              styles.reportFlagBtn,
+                              {
+                                backgroundColor: active
+                                  ? COLORS.accentYellow
+                                  : 'rgba(0,0,0,0.8)',
+                                paddingHorizontal: 9,
+                                paddingVertical: 4,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.reportFlagText,
+                                { color: active ? '#0D0D11' : '#FFFFFF' },
+                              ]}
+                            >
+                              {meta.emoji} {count}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
                     <View style={styles.cardBottomRow}>
                       {/* Icon-only Tag Pill (expands label on press/hover) */}

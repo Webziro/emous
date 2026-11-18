@@ -1,15 +1,31 @@
 import { Router, Request, Response } from 'express';
 import { PostModel } from '../models/Post';
 import { UserModel } from '../models/User';
-import { createId, isUsingMongo, localStore, saveLocalStore } from '../db';
+import {
+  createId,
+  isUsingMongo,
+  localStore,
+  reloadLocalStoreFromDiskIfNeeded,
+  saveLocalStore,
+} from '../db';
+import { createRateLimiter, inspectAndSanitizeText } from '../safety';
 import {
   ALL_BACKGROUNDS,
   BRAND,
   CURATED_GRADIENTS,
   POPULAR_TAGS,
+  REACTION_TYPES,
+  ReactionCounts,
+  ReactionType,
 } from '../../../shared';
 
 export const postsRouter = Router();
+
+const postRateLimiter = createRateLimiter({
+  action: 'confession card',
+  maxRequests: 8,
+  windowMs: 60 * 1000, // Max 8 posts per minute per deviceId
+});
 
 export function haversineMiles(
   lat1: number,
@@ -33,11 +49,32 @@ function normalizeTag(rawTag?: string): string {
   return cleaned.startsWith('#') ? cleaned : `#${cleaned}`;
 }
 
+function getReactionsPayload(
+  doc: any,
+  callerDeviceId: string
+): { reactions: ReactionCounts; myReactions: ReactionType[] } {
+  const counts: ReactionCounts = {
+    fire: doc.reactions?.fire ?? 0,
+    skull: doc.reactions?.skull ?? 0,
+    eyes: doc.reactions?.eyes ?? 0,
+    heart: doc.reactions?.heart ?? 0,
+  };
+  const myReactions: ReactionType[] = [];
+  if (callerDeviceId && doc.reactedBy) {
+    for (const type of REACTION_TYPES) {
+      if (
+        Array.isArray(doc.reactedBy[type]) &&
+        doc.reactedBy[type].includes(callerDeviceId)
+      ) {
+        myReactions.push(type);
+      }
+    }
+  }
+  return { reactions: counts, myReactions };
+}
+
 /**
  * GET /api/v1/posts
- * Supports:
- * - mode=global (default) with optional ?tag=#WorkConfessions
- * - mode=near with ?lat=40.7128&lng=-74.006&radiusMiles=5 (Uses MongoDB $near 2dsphere operator or 5-mile Haversine filter)
  */
 postsRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -68,7 +105,7 @@ postsRouter.get('/', async (req: Request, res: Response) => {
           $near: {
             $geometry: {
               type: 'Point',
-              coordinates: [lng, lat], // [longitude, latitude]
+              coordinates: [lng, lat],
             },
             $maxDistance: BRAND.milesToMeters(radiusMiles),
           },
@@ -89,6 +126,10 @@ postsRouter.get('/', async (req: Request, res: Response) => {
             haversineMiles(lat, lng, postLat, postLng).toFixed(1)
           );
         }
+        const { reactions, myReactions } = getReactionsPayload(
+          post,
+          callerDeviceId
+        );
         return {
           _id: String(post._id),
           authorHandle: post.authorHandle,
@@ -97,6 +138,8 @@ postsRouter.get('/', async (req: Request, res: Response) => {
           background: post.background,
           location: post.location,
           distanceMiles,
+          reactions,
+          myReactions,
           flagsCount: post.flagsCount,
           isFlaggedByMe: callerDeviceId
             ? post.flaggedBy?.includes(callerDeviceId)
@@ -109,7 +152,8 @@ postsRouter.get('/', async (req: Request, res: Response) => {
       return res.json({ mode, posts: formatted, popularTags: POPULAR_TAGS });
     }
 
-    // Local Store Engine with 2dsphere $near equivalence
+    // Local Store Engine
+    reloadLocalStoreFromDiskIfNeeded();
     let list = localStore.posts.filter((p) => !p.isHidden);
     if (normalizedTagFilter) {
       list = list.filter((p) => p.tagLower === normalizedTagFilter);
@@ -123,6 +167,10 @@ postsRouter.get('/', async (req: Request, res: Response) => {
           haversineMiles(lat, lng, postLat, postLng).toFixed(1)
         );
       }
+      const { reactions, myReactions } = getReactionsPayload(
+        post,
+        callerDeviceId
+      );
       return {
         _id: post._id,
         authorHandle: post.authorHandle,
@@ -131,6 +179,8 @@ postsRouter.get('/', async (req: Request, res: Response) => {
         background: post.background,
         location: post.location,
         distanceMiles,
+        reactions,
+        myReactions,
         flagsCount: post.flagsCount,
         isFlaggedByMe: callerDeviceId
           ? post.flaggedBy.includes(callerDeviceId)
@@ -168,8 +218,9 @@ postsRouter.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/posts
+ * Includes Automated Safety / Profanity Filter + Anti-Spam Rate Limiting
  */
-postsRouter.post('/', async (req: Request, res: Response) => {
+postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
   try {
     const deviceId =
       (req.body?.deviceId as string) ||
@@ -186,6 +237,13 @@ postsRouter.post('/', async (req: Request, res: Response) => {
         error: `Post content cannot exceed ${BRAND.maxPostLength} characters.`,
       });
     }
+
+    // Run Automated Safety & Profanity Shield
+    const safetyCheck = inspectAndSanitizeText(content);
+    if (!safetyCheck.allowed) {
+      return res.status(400).json({ error: safetyCheck.reason });
+    }
+    const safeContent = safetyCheck.sanitizedText;
 
     let authorHandle = (req.body?.authorHandle as string)?.trim();
     if (!authorHandle) {
@@ -239,17 +297,20 @@ postsRouter.post('/', async (req: Request, res: Response) => {
       const created = await PostModel.create({
         authorDeviceId: deviceId,
         authorHandle,
-        content,
+        content: safeContent,
         tag,
         tagLower: tag.toLowerCase(),
         background,
         location: locationField,
+        reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
+        reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
         flagsCount: 0,
         flaggedBy: [],
         isHidden: false,
       });
 
       return res.status(201).json({
+        wasMasked: safetyCheck.wasMasked,
         post: {
           _id: String(created._id),
           authorHandle: created.authorHandle,
@@ -257,6 +318,8 @@ postsRouter.post('/', async (req: Request, res: Response) => {
           tag: created.tag,
           background: created.background,
           location: created.location,
+          reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
+          myReactions: [],
           flagsCount: created.flagsCount,
           isFlaggedByMe: false,
           isHidden: created.isHidden,
@@ -265,16 +328,24 @@ postsRouter.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    reloadLocalStoreFromDiskIfNeeded();
     const now = new Date().toISOString();
     const localPost = {
       _id: createId(),
       authorDeviceId: deviceId,
       authorHandle,
-      content,
+      content: safeContent,
       tag,
       tagLower: tag.toLowerCase(),
       background,
       location: locationField,
+      reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
+      reactedBy: {
+        fire: [] as string[],
+        skull: [] as string[],
+        eyes: [] as string[],
+        heart: [] as string[],
+      },
       flagsCount: 0,
       flaggedBy: [] as string[],
       isHidden: false,
@@ -285,6 +356,7 @@ postsRouter.post('/', async (req: Request, res: Response) => {
     saveLocalStore();
 
     return res.status(201).json({
+      wasMasked: safetyCheck.wasMasked,
       post: {
         _id: localPost._id,
         authorHandle: localPost.authorHandle,
@@ -292,6 +364,8 @@ postsRouter.post('/', async (req: Request, res: Response) => {
         tag: localPost.tag,
         background: localPost.background,
         location: localPost.location,
+        reactions: localPost.reactions,
+        myReactions: [],
         flagsCount: localPost.flagsCount,
         isFlaggedByMe: false,
         isHidden: localPost.isHidden,
@@ -301,6 +375,105 @@ postsRouter.post('/', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error in POST /posts:', err);
     return res.status(500).json({ error: 'Failed to create post.' });
+  }
+});
+
+/**
+ * POST /api/v1/posts/:id/react
+ * Toggles an anonymous emoji reaction (🔥 fire, 💀 skull, 👀 eyes, ❤️ heart) on a visual feed card
+ */
+postsRouter.post('/:id/react', async (req: Request, res: Response) => {
+  try {
+    const postId = req.params.id;
+    const type = (req.body?.type as ReactionType) || 'fire';
+    const callerId =
+      (req.body?.deviceId as string) ||
+      (req.headers['x-device-id'] as string) ||
+      'anon-reactor';
+
+    if (!REACTION_TYPES.includes(type)) {
+      return res.status(400).json({ error: 'Invalid reaction type.' });
+    }
+
+    if (isUsingMongo()) {
+      const post = await PostModel.findById(postId);
+      if (!post) {
+        return res.status(404).json({ error: 'Post not found.' });
+      }
+      if (!post.reactions) {
+        post.reactions = { fire: 0, skull: 0, eyes: 0, heart: 0 };
+      }
+      if (!post.reactedBy) {
+        post.reactedBy = { fire: [], skull: [], eyes: [], heart: [] };
+      }
+
+      const list = post.reactedBy[type] || [];
+      const existingIndex = list.indexOf(callerId);
+      let action: 'added' | 'removed' = 'added';
+
+      if (existingIndex >= 0) {
+        list.splice(existingIndex, 1);
+        post.reactions[type] = Math.max(0, (post.reactions[type] || 1) - 1);
+        action = 'removed';
+      } else {
+        list.push(callerId);
+        post.reactions[type] = (post.reactions[type] || 0) + 1;
+      }
+
+      post.reactedBy[type] = list;
+      post.markModified('reactions');
+      post.markModified('reactedBy');
+      await post.save();
+
+      const { reactions, myReactions } = getReactionsPayload(post, callerId);
+      return res.json({
+        _id: String(post._id),
+        type,
+        action,
+        reactions,
+        myReactions,
+      });
+    }
+
+    reloadLocalStoreFromDiskIfNeeded();
+    const post = localStore.posts.find((p) => p._id === postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+    if (!post.reactions) {
+      post.reactions = { fire: 0, skull: 0, eyes: 0, heart: 0 };
+    }
+    if (!post.reactedBy) {
+      post.reactedBy = { fire: [], skull: [], eyes: [], heart: [] };
+    }
+
+    const list = post.reactedBy[type];
+    const idx = list.indexOf(callerId);
+    let action: 'added' | 'removed' = 'added';
+
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      post.reactions[type] = Math.max(0, post.reactions[type] - 1);
+      action = 'removed';
+    } else {
+      list.push(callerId);
+      post.reactions[type] = (post.reactions[type] || 0) + 1;
+    }
+
+    post.updatedAt = new Date().toISOString();
+    saveLocalStore();
+
+    const { reactions, myReactions } = getReactionsPayload(post, callerId);
+    return res.json({
+      _id: post._id,
+      type,
+      action,
+      reactions,
+      myReactions,
+    });
+  } catch (err) {
+    console.error('Error in POST /posts/:id/react:', err);
+    return res.status(500).json({ error: 'Failed to react to post.' });
   }
 });
 
@@ -339,6 +512,7 @@ postsRouter.post('/:id/flag', async (req: Request, res: Response) => {
       });
     }
 
+    reloadLocalStoreFromDiskIfNeeded();
     const post = localStore.posts.find((p) => p._id === postId);
     if (!post) {
       return res.status(404).json({ error: 'Post not found.' });

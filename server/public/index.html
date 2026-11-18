@@ -4,37 +4,40 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>emous — Anonymous Hyperlocal Confessions & Viral Secret Inbox</title>
+  <link rel="stylesheet" href="/styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            emous: {
-              bg: '#0D0D11',
-              surface: '#181820',
-              pink: '#FF1E8E',
-              lime: '#CCFF00',
-              yellow: '#FFE600',
-              cyan: '#00F0FF',
-              purple: '#7928CA',
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              emous: {
+                bg: '#0D0D11',
+                surface: '#181820',
+                pink: '#FF1E8E',
+                lime: '#CCFF00',
+                yellow: '#FFE600',
+                cyan: '#00F0FF',
+                purple: '#7928CA',
+              }
+            },
+            fontFamily: {
+              display: ['Syne', 'sans-serif'],
+              sans: ['Space Grotesk', 'sans-serif'],
+            },
+            boxShadow: {
+              brutal: '3px 3px 0px 0px #000000',
+              'brutal-lg': '5px 5px 0px 0px #000000',
             }
-          },
-          fontFamily: {
-            display: ['Syne', 'sans-serif'],
-            sans: ['Space Grotesk', 'sans-serif'],
-          },
-          boxShadow: {
-            brutal: '3px 3px 0px 0px #000000',
-            'brutal-lg': '5px 5px 0px 0px #000000',
           }
         }
-      }
-    };
+      };
+    }
   </script>
   <style>
     body {
@@ -94,10 +97,10 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      height: 36px;
-      min-width: 36px;
-      padding: 0 9px;
-      border-radius: 12px;
+      height: 34px;
+      min-width: 34px;
+      padding: 0 8px;
+      border-radius: 11px;
       border: 2px solid #000000;
       box-shadow: 2.5px 2.5px 0px 0px #000000;
       transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -107,7 +110,7 @@
     .card-action-pill:hover {
       transform: translate(-1px, -1px);
       box-shadow: 4px 4px 0px 0px #000000;
-      padding: 0 12px;
+      padding: 0 11px;
     }
     .card-action-label {
       max-width: 0;
@@ -117,7 +120,7 @@
       transition: max-width 0.26s ease, opacity 0.2s ease, margin-left 0.22s ease;
       font-family: 'Syne', sans-serif;
       font-weight: 800;
-      font-size: 11px;
+      font-size: 10px;
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }
@@ -125,7 +128,20 @@
     .card-action-pill:focus-visible .card-action-label {
       max-width: 170px;
       opacity: 1;
-      margin-left: 6px;
+      margin-left: 5px;
+    }
+
+    /* Reaction Pill Pop Animation */
+    .reaction-pill {
+      border: 2px solid #000000;
+      box-shadow: 2px 2px 0px 0px #000000;
+      transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease;
+    }
+    .reaction-pill:hover {
+      transform: scale(1.07);
+    }
+    .reaction-pill:active {
+      transform: scale(0.94);
     }
 
     @keyframes floatUp {
@@ -144,6 +160,10 @@
     const API_BASE = '/api/v1';
     const STORAGE_DEVICE_KEY = 'emous_device_fingerprint_v1';
     const STORAGE_HANDLE_KEY = 'emous_user_handle_v1';
+    const STORAGE_POSTS_CACHE_KEY = 'emous_posts_cache_v1';
+    const STORAGE_INBOX_CACHE_KEY = 'emous_inbox_cache_v1';
+    const STORAGE_REACTIONS_CACHE_KEY = 'emous_reactions_cache_v1';
+    const STORAGE_DEMO_MODE_KEY = 'emous_demo_mode_v1';
 
     const POPULAR_TAGS = [
       '#WorkConfessions',
@@ -153,6 +173,13 @@
       '#UnpopularOpinion',
       '#LateNightThoughts',
       '#Streetalk'
+    ];
+
+    const REACTION_LIST = [
+      { type: 'fire', emoji: '🔥', label: 'Fire' },
+      { type: 'skull', emoji: '💀', label: 'Dead' },
+      { type: 'eyes', emoji: '👀', label: 'Tea' },
+      { type: 'heart', emoji: '❤️', label: 'Real' }
     ];
 
     const STORY_THEMES = [
@@ -200,8 +227,12 @@
       mobileSimulator: false,
       viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1024,
       deviceId: '',
-      myHandle: 'GoldenWizard',
-      demoGoldenWizard: true,
+      myHandle: localStorage.getItem(STORAGE_HANDLE_KEY) || 'GoldenWizard',
+      demoGoldenWizard: localStorage.getItem(STORAGE_DEMO_MODE_KEY) === null
+        ? true
+        : localStorage.getItem(STORAGE_DEMO_MODE_KEY) === 'true',
+      soundAlertsEnabled: true,
+      lastKnownInboxCount: null,
       feedMode: 'global',
       selectedTag: 'All',
       coords: { lat: 40.7128, lng: -74.006 },
@@ -218,6 +249,7 @@
         type: 'gradient',
         name: 'Neon Riot',
         value: 'linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)',
+        colors: ['#FF1E8E', '#7928CA'],
         textColor: '#FFFFFF',
         badgeBg: '#CCFF00',
         badgeText: '#0D0D11'
@@ -230,7 +262,6 @@
       askSentSuccess: false
     };
 
-    // Helper: returns true whenever the user is either on a narrow phone screen OR inside the Mobile App Frame simulator
     function isCompactMobile() {
       return state.mobileSimulator || state.viewportWidth < 640;
     }
@@ -244,6 +275,40 @@
         state.viewportWidth = nextW;
       }
     });
+
+    // Play a punchy 2-note Web Audio synth chime when a new secret message arrives
+    function playNotificationChime() {
+      if (!state.soundAlertsEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const playNote = (freq, startTime, duration) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, startTime);
+          gain.gain.setValueAtTime(0.18, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        };
+
+        playNote(587.33, now, 0.16);        // D5
+        playNote(880.0, now + 0.14, 0.28);  // A5
+      } catch (e) {}
+    }
+
+    function updateDocumentTitleBadge() {
+      const unread = state.unreadCount || 0;
+      document.title = unread > 0
+        ? `(${unread} New!) emous — Anonymous Feed & Secret Inbox`
+        : 'emous — Anonymous Hyperlocal Confessions & Viral Secret Inbox';
+    }
 
     function getOrCreateDeviceId() {
       let id = localStorage.getItem(STORAGE_DEVICE_KEY);
@@ -267,7 +332,7 @@
           state.toast = null;
           render();
         }
-      }, 3200);
+      }, 3400);
     }
 
     function formatRelativeTime(iso) {
@@ -303,8 +368,111 @@
         }
       } catch (e) {}
 
-      await Promise.all([loadFeed(), loadInbox()]);
+      await Promise.all([loadFeed(), loadInbox(false)]);
       render();
+
+      // Phase 4: Real-Time Inbox Polling every 6 seconds for instant secret note alerts
+      setInterval(() => {
+        // Don't interrupt user while typing in a modal
+        if (!state.isComposerOpen && !state.activeStoryMsg && state.route === 'main') {
+          loadInbox(true);
+        }
+      }, 6000);
+    }
+
+    function getLocalReactionsCache() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_REACTIONS_CACHE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveLocalReactionState(postId, reactions, myReactions) {
+      try {
+        const cache = getLocalReactionsCache();
+        cache[postId] = { reactions, myReactions, updatedAt: Date.now() };
+        localStorage.setItem(STORAGE_REACTIONS_CACHE_KEY, JSON.stringify(cache));
+      } catch (e) {}
+    }
+
+    function mergePostsWithLocalCache(serverPosts) {
+      const rxCache = getLocalReactionsCache();
+      let cachedPosts = [];
+      try {
+        cachedPosts = JSON.parse(localStorage.getItem(STORAGE_POSTS_CACHE_KEY) || '[]');
+      } catch (e) {}
+
+      // Merge any locally created posts that aren't in serverPosts yet
+      const serverIds = new Set(serverPosts.map((p) => p._id));
+      const merged = [...serverPosts];
+      for (const localPost of cachedPosts) {
+        if (localPost && localPost._id && !serverIds.has(localPost._id) && !localPost.isHidden) {
+          merged.unshift(localPost);
+        }
+      }
+
+      // Overlay latest reaction state from rxCache
+      const finalPosts = merged.map((post) => {
+        const rxEntry = rxCache[post._id];
+        if (rxEntry) {
+          const serverTotal =
+            (post.reactions?.fire || 0) +
+            (post.reactions?.skull || 0) +
+            (post.reactions?.eyes || 0) +
+            (post.reactions?.heart || 0);
+          const localTotal =
+            (rxEntry.reactions?.fire || 0) +
+            (rxEntry.reactions?.skull || 0) +
+            (rxEntry.reactions?.eyes || 0) +
+            (rxEntry.reactions?.heart || 0);
+          if (localTotal >= serverTotal || (rxEntry.myReactions && rxEntry.myReactions.length > 0)) {
+            return {
+              ...post,
+              reactions: rxEntry.reactions || post.reactions,
+              myReactions: rxEntry.myReactions || post.myReactions
+            };
+          }
+        }
+        return post;
+      });
+
+      try {
+        localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(finalPosts.slice(0, 60)));
+      } catch (e) {}
+
+      return finalPosts;
+    }
+
+    function mergeInboxWithLocalCache(handle, serverMessages) {
+      const key = `${STORAGE_INBOX_CACHE_KEY}_${handle.toLowerCase()}`;
+      let cached = [];
+      try {
+        cached = JSON.parse(localStorage.getItem(key) || '[]');
+      } catch (e) {}
+
+      const byId = new Map();
+      for (const msg of serverMessages) {
+        byId.set(msg._id, msg);
+      }
+      for (const localMsg of cached) {
+        if (localMsg && localMsg._id && !localMsg.isHidden) {
+          const existing = byId.get(localMsg._id);
+          if (!existing) {
+            byId.set(localMsg._id, localMsg);
+          } else if (localMsg.reply && !existing.reply) {
+            byId.set(localMsg._id, { ...existing, reply: localMsg.reply, isRead: true, themeId: localMsg.themeId || existing.themeId });
+          }
+        }
+      }
+
+      const merged = Array.from(byId.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      try {
+        localStorage.setItem(key, JSON.stringify(merged.slice(0, 80)));
+      } catch (e) {}
+      return merged;
     }
 
     async function loadFeed() {
@@ -317,23 +485,62 @@
         params.set('lng', String(state.coords.lng));
         params.set('radiusMiles', '5');
       }
-      const res = await fetch(`${API_BASE}/posts?${params.toString()}`, {
-        headers: { 'x-device-id': state.deviceId }
-      });
-      const data = await res.json();
-      state.posts = data.posts || [];
+      try {
+        const res = await fetch(`${API_BASE}/posts?${params.toString()}`, {
+          headers: { 'x-device-id': state.deviceId },
+          cache: 'no-store'
+        });
+        const data = await res.json();
+        const serverPosts = data.posts || [];
+        state.posts =
+          state.selectedTag === 'All' && state.feedMode === 'global'
+            ? mergePostsWithLocalCache(serverPosts)
+            : serverPosts.map((p) => {
+                const rxEntry = getLocalReactionsCache()[p._id];
+                return rxEntry
+                  ? { ...p, reactions: rxEntry.reactions, myReactions: rxEntry.myReactions }
+                  : p;
+              });
+      } catch (e) {
+        try {
+          state.posts = JSON.parse(localStorage.getItem(STORAGE_POSTS_CACHE_KEY) || '[]');
+        } catch {}
+      }
       render();
     }
 
-    async function loadInbox() {
+    async function loadInbox(isBackgroundPoll = false) {
       const handle = getCurrentHandle();
-      const res = await fetch(`${API_BASE}/inbox?handle=${encodeURIComponent(handle)}`, {
-        headers: { 'x-device-id': state.deviceId }
-      });
-      const data = await res.json();
-      state.inboxMessages = data.messages || [];
-      state.unreadCount = data.unreadCount || 0;
-      render();
+      try {
+        const res = await fetch(`${API_BASE}/inbox?handle=${encodeURIComponent(handle)}`, {
+          headers: { 'x-device-id': state.deviceId },
+          cache: 'no-store'
+        });
+        const data = await res.json();
+        const nextMessages = mergeInboxWithLocalCache(handle, data.messages || []);
+        const nextCount = nextMessages.length;
+
+        if (
+          isBackgroundPoll &&
+          state.lastKnownInboxCount !== null &&
+          nextCount > state.lastKnownInboxCount
+        ) {
+          playNotificationChime();
+          showToast(`🔔 New secret confession just arrived for @${handle}!`);
+        }
+
+        state.lastKnownInboxCount = nextCount;
+        state.inboxMessages = nextMessages;
+        state.unreadCount = nextMessages.filter((m) => !m.isRead).length;
+        updateDocumentTitleBadge();
+        render();
+      } catch (e) {
+        const key = `${STORAGE_INBOX_CACHE_KEY}_${handle.toLowerCase()}`;
+        try {
+          state.inboxMessages = JSON.parse(localStorage.getItem(key) || '[]');
+          render();
+        } catch {}
+      }
     }
 
     window.navigateToAsk = (handle) => {
@@ -353,7 +560,7 @@
       }
       window.history.pushState({}, '', screen === 'inbox' ? '/?tab=inbox' : '/');
       loadFeed();
-      loadInbox();
+      loadInbox(false);
       render();
     };
 
@@ -374,6 +581,7 @@
 
     window.handleRerollIdentity = async () => {
       state.demoGoldenWizard = false;
+      state.lastKnownInboxCount = null;
       const res = await fetch(`${API_BASE}/identity/reroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
@@ -383,7 +591,7 @@
       if (data.handle) {
         state.myHandle = data.handle;
         localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
-        await loadInbox();
+        await loadInbox(false);
         showToast(`🎲 Switched auto-handle to @${data.handle}`);
       }
     };
@@ -411,6 +619,50 @@
     window.handleSelectTag = (tag) => {
       state.selectedTag = tag;
       loadFeed();
+    };
+
+    // Phase 4: Toggle Emoji Reaction (🔥, 💀, 👀, ❤️) on a Visual Feed Card (Optimistic + Persistent)
+    window.handleReactPost = async (postId, type) => {
+      // 1. Immediate optimistic update + localStorage persistence
+      state.posts = state.posts.map((p) => {
+        if (p._id !== postId) return p;
+        const rx = { ...(p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 }) };
+        const myRx = Array.isArray(p.myReactions) ? [...p.myReactions] : [];
+        const idx = myRx.indexOf(type);
+        if (idx >= 0) {
+          myRx.splice(idx, 1);
+          rx[type] = Math.max(0, (rx[type] || 1) - 1);
+        } else {
+          myRx.push(type);
+          rx[type] = (rx[type] || 0) + 1;
+        }
+        saveLocalReactionState(postId, rx, myRx);
+        return { ...p, reactions: rx, myReactions: myRx };
+      });
+      try {
+        localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
+      } catch (e) {}
+      render();
+
+      // 2. Sync to Backend API & disk database
+      try {
+        const res = await fetch(`${API_BASE}/posts/${postId}/react`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+          body: JSON.stringify({ deviceId: state.deviceId, type })
+        });
+        const data = await res.json();
+        if (res.ok && data.reactions) {
+          saveLocalReactionState(postId, data.reactions, data.myReactions);
+          state.posts = state.posts.map((p) =>
+            p._id === postId
+              ? { ...p, reactions: data.reactions, myReactions: data.myReactions }
+              : p
+          );
+          localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
+          render();
+        }
+      } catch (e) {}
     };
 
     window.handleFlagPost = async (postId) => {
@@ -458,8 +710,15 @@
         })
       });
       const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Could not publish post');
+        return;
+      }
       if (data.post) {
         state.posts.unshift(data.post);
+        try {
+          localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
+        } catch (e) {}
         state.draftContent = '';
         state.isComposerOpen = false;
         if (state.route === 'ask') {
@@ -467,7 +726,11 @@
           state.activeScreen = 'feed';
           window.history.pushState({}, '', '/');
         }
-        showToast('🔥 Visual confession card dropped to the feed!');
+        showToast(
+          data.wasMasked
+            ? '🛡️ Card dropped (Safety Shield auto-masked spicy words!)'
+            : '🔥 Visual confession card dropped to the feed!'
+        );
       }
     };
 
@@ -480,8 +743,31 @@
 
     window.handleToggleDemoHandle = () => {
       state.demoGoldenWizard = !state.demoGoldenWizard;
-      loadInbox();
+      localStorage.setItem(STORAGE_DEMO_MODE_KEY, String(state.demoGoldenWizard));
+      state.lastKnownInboxCount = null;
+      loadInbox(false);
       showToast(state.demoGoldenWizard ? '🧙‍♂️ Viewing @GoldenWizard Inbox' : `👤 Viewing @${state.myHandle} Inbox`);
+    };
+
+    // Simulate an incoming secret note to test Real-Time Alerts + Chime
+    window.handleSimulateIncomingSecret = async () => {
+      const handle = getCurrentHandle();
+      const randomPrompt = QUICK_PROMPTS[Math.floor(Math.random() * QUICK_PROMPTS.length)];
+      const randomTheme = STORY_THEMES[Math.floor(Math.random() * STORY_THEMES.length)].id;
+      const res = await fetch(`${API_BASE}/inbox/${encodeURIComponent(handle)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: randomPrompt,
+          themeId: randomTheme,
+          deviceId: 'live-fan-simulator'
+        })
+      });
+      if (res.ok) {
+        playNotificationChime();
+        await loadInbox(false);
+        showToast(`🔔 Ding! New secret confession arrived for @${handle}!`);
+      }
     };
 
     window.handleOpenStoryModal = (msgId) => {
@@ -505,6 +791,10 @@
       if (data.message) {
         state.activeStoryMsg = data.message;
         state.inboxMessages = state.inboxMessages.map((m) => (m._id === data.message._id ? data.message : m));
+        try {
+          const key = `${STORAGE_INBOX_CACHE_KEY}_${getCurrentHandle().toLowerCase()}`;
+          localStorage.setItem(key, JSON.stringify(state.inboxMessages.slice(0, 80)));
+        } catch (e) {}
         if (downloadPng) {
           exportStoryCanvasPng(getCurrentHandle(), data.message.question, reply, state.storyThemeId);
           showToast('📸 Downloaded 9:16 Story PNG for Instagram/Snapchat!');
@@ -551,13 +841,25 @@
           deviceId: state.deviceId
         })
       });
-      if (res.ok) {
-        state.askSentSuccess = true;
-        state.askQuestion = '';
-        triggerCelebrationExplosion();
-        await loadInbox();
-        render();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not send secret note');
+        return;
       }
+      if (data.item) {
+        try {
+          const key = `${STORAGE_INBOX_CACHE_KEY}_${state.askTargetHandle.toLowerCase()}`;
+          const existing = JSON.parse(localStorage.getItem(key) || '[]');
+          existing.unshift(data.item);
+          localStorage.setItem(key, JSON.stringify(existing.slice(0, 80)));
+        } catch (e) {}
+      }
+      state.askSentSuccess = true;
+      state.askQuestion = '';
+      triggerCelebrationExplosion();
+      playNotificationChime();
+      await loadInbox(false);
+      render();
     };
 
     function triggerCelebrationExplosion() {
@@ -598,7 +900,92 @@
         }
       }
       ctx.fillText(line.trim(), x, currentY);
+      return currentY + lineHeight;
     }
+
+    // Phase 4: Export ANY Visual Feed Confession Card as a 1080x1920 (9:16) Instagram/Snapchat Story PNG
+    window.handleShareFeedCardStory = (postId) => {
+      const post = state.posts.find((p) => p._id === postId);
+      if (!post) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+
+      // Dark Streetwear Backdrop
+      ctx.fillStyle = '#0D0D11';
+      ctx.fillRect(0, 0, 1080, 1920);
+
+      // Top Streetwear Flyer Header
+      ctx.fillStyle = '#CCFF00';
+      ctx.fillRect(270, 130, 540, 82);
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(270, 130, 540, 82);
+      ctx.fillStyle = '#0D0D11';
+      ctx.font = '900 34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔥 EMOUS COMMUNITY FEED', 540, 184);
+
+      // Main 9:16 Center Confession Card
+      const cardX = 85, cardY = 290, cardW = 910, cardH = 1180;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 20, cardY + 20, cardW, cardH);
+
+      const colors = post.background?.colors || ['#FF1E8E', '#7928CA'];
+      const grad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + cardH);
+      grad.addColorStop(0, colors[0] || '#FF1E8E');
+      grad.addColorStop(1, colors[1] || '#7928CA');
+      ctx.fillStyle = grad;
+      ctx.fillRect(cardX, cardY, cardW, cardH);
+      ctx.lineWidth = 10;
+      ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+      // Author Pill
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 55, cardY + 55, 420, 68);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 28px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`🎭 @${post.authorHandle}`, cardX + 80, cardY + 99);
+
+      // Confession Text
+      ctx.fillStyle = post.background?.textColor || '#FFFFFF';
+      ctx.font = '900 54px sans-serif';
+      wrapCanvasText(ctx, `“${post.content}”`, cardX + 60, cardY + 250, cardW - 120, 74);
+
+      // Tag Badge at Bottom of Card
+      ctx.fillStyle = post.background?.badgeBg || '#CCFF00';
+      ctx.fillRect(cardX + 55, cardY + cardH - 135, 390, 74);
+      ctx.strokeRect(cardX + 55, cardY + cardH - 135, 390, 74);
+      ctx.fillStyle = post.background?.badgeText || '#0D0D11';
+      ctx.font = '900 28px sans-serif';
+      ctx.fillText(post.tag, cardX + 80, cardY + cardH - 88);
+
+      // Reaction Summary Pill
+      const rx = post.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 };
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(cardX + 475, cardY + cardH - 135, 380, 74);
+      ctx.fillStyle = '#FFE600';
+      ctx.font = '800 26px sans-serif';
+      ctx.fillText(`🔥 ${rx.fire}  💀 ${rx.skull}  👀 ${rx.eyes}  ❤️ ${rx.heart}`, cardX + 500, cardY + cardH - 88);
+
+      // Bottom Watermark CTA
+      ctx.fillStyle = '#FF1E8E';
+      ctx.fillRect(200, 1620, 680, 112);
+      ctx.strokeRect(200, 1620, 680, 112);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`emous.app/ask/${post.authorHandle}`, 540, 1688);
+
+      const a = document.createElement('a');
+      a.download = `emous-card-${post.authorHandle.toLowerCase()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      showToast('📸 Downloaded 9:16 Feed Card Story Image (PNG)!');
+    };
 
     function exportStoryCanvasPng(handle, question, reply, themeId) {
       const theme = STORY_THEMES.find((t) => t.id === themeId) || STORY_THEMES[0];
@@ -753,7 +1140,6 @@
 
       return `
         <div class="min-h-screen flex flex-col justify-between ${compact ? 'pb-6' : 'pb-24'}">
-          <!-- Top Navigation Header with Quick Actions (+ Create Card & Get My Link) -->
           <header class="w-full max-w-lg mx-auto px-3 pt-3.5 pb-2 flex items-center justify-between gap-1.5">
             <button onclick="navigateToMain('feed')" class="inline-flex items-center gap-1.5 bg-emous-lime text-black font-display font-extrabold text-sm px-3 py-1 rounded-full flyer-btn shrink-0">
               <span>emous</span>
@@ -770,14 +1156,12 @@
             </div>
           </header>
 
-          <!-- Main Viral Receiver Card -->
           <main class="w-full max-w-lg mx-auto px-3 my-auto py-2">
             <div class="mb-3 text-center">
               <div class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal mb-2">
                 🤫 SECRET CONFESSION DROPBOX
               </div>
 
-              <!-- White Header Card: Uses overflow-hidden + max-w-full + responsive text so @Handle NEVER overflows -->
               <div class="bg-white text-black rounded-2xl p-3 flyer-card overflow-hidden">
                 <div class="flex items-center gap-2.5 min-w-0">
                   <div class="w-10 h-10 rounded-xl bg-emous-pink border-2 border-black flex items-center justify-center text-white font-display font-extrabold text-xs shadow-brutal shrink-0">
@@ -821,7 +1205,7 @@
                 <div style="background-color: ${activeTheme.topCardBg}" class="rounded-2xl p-3.5 flyer-card transition-colors">
                   <div class="flex items-center justify-between gap-1.5 mb-2">
                     <span class="bg-black text-emous-yellow text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full truncate">
-                      🔒 Anonymous Note
+                      🔒 Anonymous Note • Safety Shield Active
                     </span>
                     <button type="button" onclick="handleShuffleAskIdea()" class="bg-emous-yellow text-black text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal hover:bg-emous-lime shrink-0">
                       🎲 Shuffle Idea
@@ -847,7 +1231,6 @@
             `
             }
 
-            <!-- Quick Action Links inside Receiver View: Create a Card OR Get Your Inbox Link -->
             <div class="mt-3 grid grid-cols-2 gap-2">
               <button onclick="openCardComposer()" class="bg-emous-surface text-emous-yellow font-display font-extrabold text-[10px] py-2 px-2.5 rounded-xl border-2 border-black shadow-brutal uppercase text-center truncate">
                 ✨ Create Feed Card
@@ -858,7 +1241,6 @@
             </div>
           </main>
 
-          <!-- Growth Loop Footer (Stays inside the mobile frame when simulator is active!) -->
           <footer class="${
             state.mobileSimulator ? 'mt-3' : 'fixed bottom-0 inset-x-0 z-40'
           } bg-emous-surface/95 backdrop-blur-md border-t-3 border-black px-3 py-2.5">
@@ -961,7 +1343,9 @@
                   }"
                 >
                   <span class="truncate">🔗 Inbox</span>
-                  <span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0">
+                  <span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0 ${
+                    state.unreadCount > 0 ? 'animate-bounce' : ''
+                  }">
                     ${state.inboxMessages.length}
                   </span>
                 </button>
@@ -981,12 +1365,12 @@
               ? `
             <!-- SCREEN 1: THE APP HOME FEED -->
             <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-3.5">
-              <!-- Quick "Create Card / Get Inbox Link" Strip on Mobile so both are always 1 tap away -->
+              <!-- Top Banner with Get My Link + Dual-Feed Toggle -->
               <div class="bg-emous-surface rounded-2xl p-3 flyer-card space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
                   <div class="min-w-0">
                     <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[8px] uppercase px-2 py-0.5 rounded border border-black mb-0.5">
-                      ZERO-LOGIN FEED
+                      ZERO-LOGIN FEED • SAFETY SHIELD ON
                     </span>
                     <h1 class="font-display font-extrabold ${compact ? 'text-base' : 'text-xl sm:text-2xl'} text-white leading-tight truncate">
                       ${state.feedMode === 'global' ? '🌐 Global Tags Feed' : '📍 Near Me (5mi)'}
@@ -1036,9 +1420,11 @@
                     const textColor = isImage ? '#FFFFFF' : post.background?.textColor || '#FFFFFF';
                     const cleanTagLabel = String(post.tag || '#Confessions').replace(/^#/, '');
                     const reportLabel = post.flagsCount > 0 ? `Report (${post.flagsCount}/3)` : 'Report';
+                    const rx = post.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 };
+                    const myRx = Array.isArray(post.myReactions) ? post.myReactions : [];
 
                     return `
-                    <article style="${bgStyle}" class="rounded-2xl p-3.5 sm:p-5 flyer-card flex flex-col justify-between min-h-[185px] relative overflow-hidden">
+                    <article style="${bgStyle}" class="rounded-2xl p-3.5 sm:p-5 flyer-card flex flex-col justify-between min-h-[215px] relative overflow-hidden">
                       <div class="flex items-center justify-between gap-1.5 min-w-0">
                         <button onclick="navigateToAsk('${escapeHtml(post.authorHandle)}')" class="bg-black/85 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full border-2 border-black hover:bg-emous-pink truncate max-w-[55%]">
                           🎭 @${escapeHtml(post.authorHandle)}
@@ -1063,48 +1449,86 @@
                         “${escapeHtml(post.content)}”
                       </p>
 
-                      <!-- Icon-Only Action Pills -->
-                      <div class="flex items-center justify-between gap-1.5 pt-1">
-                        <button
-                          onclick="handleSelectTag('${escapeHtml(post.tag)}')"
-                          style="background-color: ${post.background?.badgeBg || '#CCFF00'}; color: ${post.background?.badgeText || '#0D0D11'}"
-                          class="card-action-pill"
-                          aria-label="Filter by ${escapeHtml(post.tag)}"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="4" x2="20" y1="9" y2="9"/>
-                            <line x1="4" x2="20" y1="15" y2="15"/>
-                            <line x1="10" x2="8" y1="3" y2="21"/>
-                            <line x1="16" x2="14" y1="3" y2="21"/>
-                          </svg>
-                          <span class="card-action-label">${escapeHtml(cleanTagLabel)}</span>
-                        </button>
+                      <div class="space-y-2 pt-1">
+                        <!-- Phase 4: Emoji Reactions Bar (🔥, 💀, 👀, ❤️) -->
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          ${REACTION_LIST.map((r) => {
+                            const active = myRx.includes(r.type);
+                            const count = rx[r.type] || 0;
+                            return `
+                              <button
+                                onclick="handleReactPost('${post._id}', '${r.type}')"
+                                title="React with ${r.label}"
+                                class="reaction-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                                  active
+                                    ? 'bg-emous-yellow text-black'
+                                    : 'bg-black/80 text-white hover:bg-black'
+                                }"
+                              >
+                                <span>${r.emoji}</span>
+                                <span>${count}</span>
+                              </button>
+                            `;
+                          }).join('')}
+                        </div>
 
-                        <div class="flex items-center gap-1.5">
+                        <!-- Bottom Row: Icon-Only Action Pills (reveal label on hover) -->
+                        <div class="flex items-center justify-between gap-1.5">
                           <button
-                            onclick="navigateToAsk('${escapeHtml(post.authorHandle)}')"
-                            class="card-action-pill bg-white text-black hover:bg-emous-lime"
-                            aria-label="Ask Secret"
+                            onclick="handleSelectTag('${escapeHtml(post.tag)}')"
+                            style="background-color: ${post.background?.badgeBg || '#CCFF00'}; color: ${post.background?.badgeText || '#0D0D11'}"
+                            class="card-action-pill"
+                            aria-label="Filter by ${escapeHtml(post.tag)}"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                              <line x1="4" x2="20" y1="9" y2="9"/>
+                              <line x1="4" x2="20" y1="15" y2="15"/>
+                              <line x1="10" x2="8" y1="3" y2="21"/>
+                              <line x1="16" x2="14" y1="3" y2="21"/>
                             </svg>
-                            <span class="card-action-label">Ask Secret</span>
+                            <span class="card-action-label">${escapeHtml(cleanTagLabel)}</span>
                           </button>
 
-                          <button
-                            onclick="handleFlagPost('${post._id}')"
-                            class="card-action-pill ${
-                              post.isFlaggedByMe ? 'bg-emous-pink text-white' : 'bg-black/85 text-white hover:bg-red-600'
-                            }"
-                            aria-label="Report Post"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5] ${post.isFlaggedByMe ? 'text-white' : 'text-emous-pink'}" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                              <line x1="4" x2="4" y1="22" y2="15"/>
-                            </svg>
-                            <span class="card-action-label">${escapeHtml(reportLabel)}</span>
-                          </button>
+                          <div class="flex items-center gap-1.5">
+                            <!-- Phase 4: Share Feed Card as 9:16 Story PNG -->
+                            <button
+                              onclick="handleShareFeedCardStory('${post._id}')"
+                              class="card-action-pill bg-emous-yellow text-black hover:bg-emous-lime"
+                              aria-label="Share 9:16 Story"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                                <polyline points="16 6 12 2 8 6"/>
+                                <line x1="12" x2="12" y1="2" y2="15"/>
+                              </svg>
+                              <span class="card-action-label">Share Story</span>
+                            </button>
+
+                            <button
+                              onclick="navigateToAsk('${escapeHtml(post.authorHandle)}')"
+                              class="card-action-pill bg-white text-black hover:bg-emous-lime"
+                              aria-label="Ask Secret"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+                              </svg>
+                              <span class="card-action-label">Ask Secret</span>
+                            </button>
+
+                            <button
+                              onclick="handleFlagPost('${post._id}')"
+                              class="card-action-pill ${
+                                post.isFlaggedByMe ? 'bg-emous-pink text-white' : 'bg-black/85 text-white hover:bg-red-600'
+                              }"
+                              aria-label="Report Post"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5] ${post.isFlaggedByMe ? 'text-white' : 'text-emous-pink'}" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                <line x1="4" x2="4" y1="22" y2="15"/>
+                              </svg>
+                              <span class="card-action-label">${escapeHtml(reportLabel)}</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -1119,9 +1543,18 @@
             <main class="max-w-4xl mx-auto px-3 pt-3.5 space-y-4">
               <div class="bg-emous-lime text-black rounded-2xl p-4 flyer-card space-y-3">
                 <div class="flex items-center justify-between gap-2 flex-wrap">
-                  <span class="inline-block bg-black text-emous-yellow text-[9px] font-display font-extrabold px-2 py-0.5 rounded-full uppercase">
-                    ✨ VIRAL ANONYMOUS INBOX
-                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="inline-block bg-black text-emous-yellow text-[9px] font-display font-extrabold px-2 py-0.5 rounded-full uppercase">
+                      ✨ VIRAL ANONYMOUS INBOX
+                    </span>
+                    <button
+                      onclick="state.soundAlertsEnabled = !state.soundAlertsEnabled; render();"
+                      class="bg-black text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full"
+                    >
+                      ${state.soundAlertsEnabled ? '🔔 Live Alerts: ON' : '🔕 Alerts: Muted'}
+                    </button>
+                  </div>
+
                   <button onclick="handleToggleDemoHandle()" class="bg-white text-black text-[10px] font-extrabold px-2.5 py-1 rounded-lg border-2 border-black shadow-brutal">
                     ${state.demoGoldenWizard ? `👤 My Handle (@${escapeHtml(state.myHandle)})` : '🧙‍♂️ @GoldenWizard Demo'}
                   </button>
@@ -1138,12 +1571,15 @@
                       emous.app/ask/${escapeHtml(currentHandle)}
                     </span>
                   </div>
-                  <div class="grid grid-cols-2 gap-2">
+                  <div class="grid grid-cols-3 gap-1.5">
                     <button onclick="handleCopyLink()" class="bg-emous-pink text-white font-display font-extrabold text-[10px] py-2 px-2 rounded-lg flyer-btn uppercase text-center truncate">
                       🔗 Copy Link
                     </button>
                     <button onclick="navigateToAsk('${escapeHtml(currentHandle)}')" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] py-2 px-2 rounded-lg flyer-btn uppercase text-center truncate">
                       🚀 Open Link
+                    </button>
+                    <button onclick="handleSimulateIncomingSecret()" class="bg-black text-emous-lime font-display font-extrabold text-[10px] py-2 px-2 rounded-lg flyer-btn uppercase text-center truncate" title="Simulate a fan sending you a secret note right now">
+                      🔔 Test Live Note
                     </button>
                   </div>
                 </div>

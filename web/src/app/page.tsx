@@ -29,6 +29,9 @@ import {
   InboxMessageDTO,
   POPULAR_TAGS,
   PostDTO,
+  REACTION_META,
+  REACTION_TYPES,
+  ReactionType,
   STORY_COLOR_PAIRS,
   UserIdentityDTO,
   createPost,
@@ -37,6 +40,7 @@ import {
   flagInboxMessage,
   flagPost,
   initZeroFrictionIdentity,
+  reactToPost,
   replyToInboxMessage,
   rerollHandle,
   shuffleCardBackground,
@@ -702,6 +706,44 @@ export default function EmousHomeApp() {
                     >
                       “{post.content}”
                     </p>
+
+                    {/* Phase 4: Emoji Reactions Row (🔥, 💀, 👀, ❤️) */}
+                    <div className="flex items-center gap-1.5 flex-wrap pb-2 z-10">
+                      {REACTION_TYPES.map((type) => {
+                        const meta = REACTION_META[type];
+                        const count = post.reactions?.[type] ?? 0;
+                        const active = post.myReactions?.includes(type);
+                        return (
+                          <button
+                            key={type}
+                            onClick={async () => {
+                              try {
+                                const res = await reactToPost(post._id, type);
+                                setPosts((prev) =>
+                                  prev.map((p) =>
+                                    p._id === post._id
+                                      ? {
+                                          ...p,
+                                          reactions: res.reactions,
+                                          myReactions: res.myReactions,
+                                        }
+                                      : p
+                                  )
+                                );
+                              } catch {}
+                            }}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold border-2 border-black shadow-brutal transition-transform active:scale-95 ${
+                              active
+                                ? 'bg-emous-yellow text-black'
+                                : 'bg-black/80 text-white hover:bg-black'
+                            }`}
+                          >
+                            <span>{meta.emoji}</span>
+                            <span>{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
                     {/* Bottom Row: Icon-Only Action Pills that reveal labels on hover */}
                     <div className="flex items-center justify-between gap-2 pt-2 z-10">

@@ -78,7 +78,21 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-11-12T17:28:09.006Z",
-      "updatedAt": "2026-11-12T17:28:09.006Z"
+      "updatedAt": "2026-11-18T17:04:16.985Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 1
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": [
+          "web-3pbdu13r-mwbqrp0x"
+        ]
+      }
     },
     {
       "_id": "83f7f9fb615747609dc0f9d1",
@@ -108,7 +122,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-11-12T12:51:34.276Z",
-      "updatedAt": "2026-11-12T12:51:34.276Z"
+      "updatedAt": "2026-11-12T12:51:34.276Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "c947ebb724eb467c82137cc1",
@@ -138,7 +164,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-11-11T06:49:06.159Z",
-      "updatedAt": "2026-11-11T06:49:06.159Z"
+      "updatedAt": "2026-11-11T06:49:06.159Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "c5f6927981b448caa7622321",
@@ -176,7 +214,19 @@
       ],
       "isHidden": true,
       "createdAt": "2026-10-28T17:16:27.263Z",
-      "updatedAt": "2026-10-28T17:16:27.317Z"
+      "updatedAt": "2026-10-28T17:16:27.317Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "7483d1131dc3431b9cbb89d0",
@@ -210,7 +260,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-10-28T17:08:26.941Z",
-      "updatedAt": "2026-10-28T17:16:26.941Z"
+      "updatedAt": "2026-10-28T17:16:26.941Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "46f3d88524624eb8bede4a26",
@@ -245,7 +307,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-10-28T16:52:26.942Z",
-      "updatedAt": "2026-10-28T17:16:26.941Z"
+      "updatedAt": "2026-10-28T17:16:26.941Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "df8083313ba241688ab3eae8",
@@ -279,7 +353,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-10-28T16:29:26.942Z",
-      "updatedAt": "2026-10-28T17:16:26.941Z"
+      "updatedAt": "2026-10-28T17:16:26.941Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "c08d2bf9181a4dad83c92726",
@@ -314,7 +400,19 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-10-28T15:41:26.942Z",
-      "updatedAt": "2026-10-28T17:16:26.941Z"
+      "updatedAt": "2026-10-28T17:16:26.941Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     },
     {
       "_id": "97ec634ccec5418aaad158f8",
@@ -348,10 +446,302 @@
       "flaggedBy": [],
       "isHidden": false,
       "createdAt": "2026-10-28T14:56:26.942Z",
-      "updatedAt": "2026-10-28T17:16:26.941Z"
+      "updatedAt": "2026-10-28T17:16:26.941Z",
+      "reactions": {
+        "fire": 0,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      }
     }
   ],
   "inbox": [
+    {
+      "_id": "9ac008a2961e47a1ab892af0",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Be honest... what was your first impression of me? 👀",
+      "themeId": "story-lime-white",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:41:22.276Z",
+      "updatedAt": "2026-11-18T16:41:22.276Z"
+    },
+    {
+      "_id": "898b3f165bba4677a33d641c",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Lowkey had a crush on you since we met ngl 🔥",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:41:22.242Z",
+      "updatedAt": "2026-11-18T16:41:22.242Z"
+    },
+    {
+      "_id": "dd6ef2f300ab4157890ad559",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "web-3pbdu13r-mwbqrp0x",
+      "question": "Hello Golden Wiz, thanks alot for the other day.",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:41:03.341Z",
+      "updatedAt": "2026-11-18T16:41:03.341Z"
+    },
+    {
+      "_id": "9b64e449de824facb007221d",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Rate my vibe from 1-10 & don’t hold back ⚡",
+      "themeId": "story-lime-white",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:23.251Z",
+      "updatedAt": "2026-11-18T16:40:23.251Z"
+    },
+    {
+      "_id": "41f65096eebd4312936ee4f9",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Be honest... what was your first impression of me? 👀",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:23.214Z",
+      "updatedAt": "2026-11-18T16:40:23.214Z"
+    },
+    {
+      "_id": "fdafd5987ff54dd6a0fb5b33",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Rate my vibe from 1-10 & don’t hold back ⚡",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:21.014Z",
+      "updatedAt": "2026-11-18T16:40:21.014Z"
+    },
+    {
+      "_id": "fc7533c7aca24f98b47674ea",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Lowkey had a crush on you since we met ngl 🔥",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:19.894Z",
+      "updatedAt": "2026-11-18T16:40:19.894Z"
+    },
+    {
+      "_id": "592b3e9c1c3c45c69540c47a",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Be honest... what was your first impression of me? 👀",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:19.382Z",
+      "updatedAt": "2026-11-18T16:40:19.382Z"
+    },
+    {
+      "_id": "66751170a0de48f5818dd313",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Lowkey had a crush on you since we met ngl 🔥",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:19.340Z",
+      "updatedAt": "2026-11-18T16:40:19.340Z"
+    },
+    {
+      "_id": "64e41ba7d0c440138fc3e845",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "What song reminds you of me on late night drives? 🎧",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:19.121Z",
+      "updatedAt": "2026-11-18T16:40:19.121Z"
+    },
+    {
+      "_id": "d83d398b11f34e7bac06c1b2",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Be honest... what was your first impression of me? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:18.922Z",
+      "updatedAt": "2026-11-18T16:40:18.922Z"
+    },
+    {
+      "_id": "9ccf01a16ad641018f27bb81",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Rate my vibe from 1-10 & don’t hold back ⚡",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:18.721Z",
+      "updatedAt": "2026-11-18T16:40:18.721Z"
+    },
+    {
+      "_id": "b5b622a382a14575b75aec06",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Be honest... what was your first impression of me? 👀",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:18.560Z",
+      "updatedAt": "2026-11-18T16:40:18.560Z"
+    },
+    {
+      "_id": "a87d4b1d87a54db3bd9bbd82",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Drop a secret you would never tell me to my face 🤫",
+      "themeId": "story-lime-white",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:18.353Z",
+      "updatedAt": "2026-11-18T16:40:18.353Z"
+    },
+    {
+      "_id": "5092cef7200a41ebb9cdb7d7",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "What song reminds you of me on late night drives? 🎧",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:18.329Z",
+      "updatedAt": "2026-11-18T16:40:18.329Z"
+    },
+    {
+      "_id": "80915e7bd95d44d98b0bbc48",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "What song reminds you of me on late night drives? 🎧",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:17.607Z",
+      "updatedAt": "2026-11-18T16:40:17.607Z"
+    },
+    {
+      "_id": "90398d319ae14bdd98250613",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "What song reminds you of me on late night drives? 🎧",
+      "themeId": "story-lime-white",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:15.952Z",
+      "updatedAt": "2026-11-18T16:40:15.952Z"
+    },
+    {
+      "_id": "4c5591e5181d469bb52198b6",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Rate my vibe from 1-10 & don’t hold back ⚡",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:15.910Z",
+      "updatedAt": "2026-11-18T16:40:15.910Z"
+    },
+    {
+      "_id": "8a5bba7c3dd5472d878225ac",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "Lowkey had a crush on you since we met ngl 🔥",
+      "themeId": "story-pink-lime",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:06.186Z",
+      "updatedAt": "2026-11-18T16:40:06.186Z"
+    },
+    {
+      "_id": "73690afcb0e141baa0efb993",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "senderDeviceId": "live-fan-simulator",
+      "question": "What song reminds you of me on late night drives? 🎧",
+      "themeId": "story-yellow-pink",
+      "isRead": false,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-18T16:40:06.100Z",
+      "updatedAt": "2026-11-18T16:40:06.100Z"
+    },
     {
       "_id": "021295d2c9d84766b13821c8",
       "recipientHandle": "ElectricFalcon",

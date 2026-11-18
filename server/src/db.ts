@@ -44,6 +44,18 @@ export interface LocalPostDoc {
     coordinates: [number, number]; // [longitude, latitude]
     label?: string;
   };
+  reactions?: {
+    fire: number;
+    skull: number;
+    eyes: number;
+    heart: number;
+  };
+  reactedBy?: {
+    fire: string[];
+    skull: string[];
+    eyes: string[];
+    heart: string[];
+  };
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -82,6 +94,29 @@ export const localStore: LocalDBState = {
   inbox: [],
 };
 
+let lastLoadedMtimeMs = 0;
+
+export function reloadLocalStoreFromDiskIfNeeded(force = false) {
+  if (isMongoConnected) return;
+  try {
+    if (!fs.existsSync(DATA_FILE)) return;
+    const stat = fs.statSync(DATA_FILE);
+    if (force || stat.mtimeMs > lastLoadedMtimeMs || localStore.users.length === 0) {
+      const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      localStore.users = raw.users || [];
+      localStore.posts = (raw.posts || []).map((p: any) => ({
+        ...p,
+        reactions: p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 },
+        reactedBy: p.reactedBy || { fire: [], skull: [], eyes: [], heart: [] },
+      }));
+      localStore.inbox = raw.inbox || [];
+      lastLoadedMtimeMs = stat.mtimeMs;
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
 export function saveLocalStore() {
   if (isMongoConnected) return;
   try {
@@ -90,6 +125,8 @@ export function saveLocalStore() {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(DATA_FILE, JSON.stringify(localStore, null, 2), 'utf8');
+    const stat = fs.statSync(DATA_FILE);
+    lastLoadedMtimeMs = stat.mtimeMs;
   } catch (err) {
     // Non-fatal in read-only or test environments
   }
@@ -137,16 +174,7 @@ export async function connectDatabase(): Promise<{
   }
 
   isMongoConnected = false;
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      localStore.users = raw.users || [];
-      localStore.posts = raw.posts || [];
-      localStore.inbox = raw.inbox || [];
-    } catch {
-      // Re-seed if corrupted
-    }
-  }
+  reloadLocalStoreFromDiskIfNeeded(true);
 
   await seedInitialDataIfEmpty();
   purgeExpiredInboxMessages();
@@ -209,6 +237,8 @@ export async function seedInitialDataIfEmpty() {
         coordinates: [-74.006, 40.7128] as [number, number],
         label: '0.4 mi away',
       },
+      reactions: { fire: 14, skull: 8, eyes: 5, heart: 3 },
+      reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -229,6 +259,8 @@ export async function seedInitialDataIfEmpty() {
         coordinates: [-73.998, 40.7205] as [number, number],
         label: '1.1 mi away',
       },
+      reactions: { fire: 22, skull: 2, eyes: 19, heart: 11 },
+      reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -249,6 +281,8 @@ export async function seedInitialDataIfEmpty() {
         coordinates: [-74.012, 40.708] as [number, number],
         label: '0.8 mi away',
       },
+      reactions: { fire: 31, skull: 6, eyes: 4, heart: 18 },
+      reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -269,6 +303,8 @@ export async function seedInitialDataIfEmpty() {
         coordinates: [-73.989, 40.7308] as [number, number],
         label: '1.9 mi away',
       },
+      reactions: { fire: 9, skull: 27, eyes: 7, heart: 4 },
+      reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -289,6 +325,8 @@ export async function seedInitialDataIfEmpty() {
         coordinates: [-74.001, 40.718] as [number, number],
         label: '0.6 mi away',
       },
+      reactions: { fire: 7, skull: 3, eyes: 15, heart: 24 },
+      reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
