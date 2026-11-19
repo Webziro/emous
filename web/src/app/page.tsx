@@ -282,7 +282,23 @@ export default function EmousHomeApp() {
     ? 'GoldenWizard'
     : identity?.handle || 'GoldenWizard';
 
-  // 2. Load Feed Posts
+  const STORAGE_POSTS_CACHE = 'emous_posts_cache_v1';
+  const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v1';
+  const STORAGE_REACTIONS_CACHE = 'emous_reactions_cache_v1';
+
+  const getLocalRxCache = (): Record<
+    string,
+    { reactions: any; myReactions: any }
+  > => {
+    if (typeof window === 'undefined') return {};
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_REACTIONS_CACHE) || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  // 2. Load Feed Posts (with localStorage reaction & post persistence)
   const loadFeed = useCallback(async () => {
     setIsLoadingFeed(true);
     try {
@@ -292,9 +308,33 @@ export default function EmousHomeApp() {
         lat: coords.lat,
         lng: coords.lng,
       });
-      setPosts(data.posts);
+      const rxCache = getLocalRxCache();
+      const merged = data.posts.map((post) => {
+        const entry = rxCache[post._id];
+        return entry
+          ? {
+              ...post,
+              reactions: entry.reactions || post.reactions,
+              myReactions: entry.myReactions || post.myReactions,
+            }
+          : post;
+      });
+      setPosts(merged);
+      if (typeof window !== 'undefined' && selectedTag === 'All') {
+        localStorage.setItem(
+          STORAGE_POSTS_CACHE,
+          JSON.stringify(merged.slice(0, 60))
+        );
+      }
     } catch {
-      // Keep current posts
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = JSON.parse(
+            localStorage.getItem(STORAGE_POSTS_CACHE) || '[]'
+          );
+          if (cached.length > 0) setPosts(cached);
+        } catch {}
+      }
     } finally {
       setIsLoadingFeed(false);
     }
@@ -304,20 +344,36 @@ export default function EmousHomeApp() {
     loadFeed();
   }, [loadFeed]);
 
-  // 3. Load Inbox Messages
+  // 3. Load Inbox Messages (with background polling & localStorage persistence)
   const loadInbox = useCallback(async () => {
     if (!currentHandle) return;
+    const inboxKey = `${STORAGE_INBOX_CACHE}_${currentHandle.toLowerCase()}`;
     try {
       const data = await fetchInbox(currentHandle);
       setInboxMessages(data.messages);
       setUnreadCount(data.unreadCount);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          inboxKey,
+          JSON.stringify(data.messages.slice(0, 80))
+        );
+      }
     } catch {
-      // Ignore error
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = JSON.parse(localStorage.getItem(inboxKey) || '[]');
+          if (cached.length > 0) setInboxMessages(cached);
+        } catch {}
+      }
     }
   }, [currentHandle]);
 
   useEffect(() => {
     loadInbox();
+    const timer = setInterval(() => {
+      loadInbox();
+    }, 8000);
+    return () => clearInterval(timer);
   }, [loadInbox]);
 
   // Toggle Near Me (requests browser GPS or uses seed downtown coords so demo works everywhere)
@@ -400,11 +456,11 @@ export default function EmousHomeApp() {
     const origin =
       typeof window !== 'undefined'
         ? window.location.origin
-        : 'https://emous.app';
+        : 'https://emous.vercel.app';
     const fullUrl = `${origin}/ask/${currentHandle}`;
     navigator.clipboard?.writeText(fullUrl);
     setCopiedLink(true);
-    showToast(`🔗 Copied: emous.app/ask/${currentHandle}`);
+    showToast(`🔗 Copied: ${BRAND.domain}/ask/${currentHandle}`);
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
@@ -717,8 +773,64 @@ export default function EmousHomeApp() {
                           <button
                             key={type}
                             onClick={async () => {
+                              // 1. Optimistic instant update + localStorage persistence
+                              setPosts((prev) =>
+                                prev.map((p) => {
+                                  if (p._id !== post._id) return p;
+                                  const nextRx = {
+                                    ...(p.reactions || {
+                                      fire: 0,
+                                      skull: 0,
+                                      eyes: 0,
+                                      heart: 0,
+                                    }),
+                                  };
+                                  const nextMy = Array.isArray(p.myReactions)
+                                    ? [...p.myReactions]
+                                    : [];
+                                  const idx = nextMy.indexOf(type);
+                                  if (idx >= 0) {
+                                    nextMy.splice(idx, 1);
+                                    nextRx[type] = Math.max(
+                                      0,
+                                      (nextRx[type] || 1) - 1
+                                    );
+                                  } else {
+                                    nextMy.push(type);
+                                    nextRx[type] = (nextRx[type] || 0) + 1;
+                                  }
+                                  try {
+                                    const cache = getLocalRxCache();
+                                    cache[post._id] = {
+                                      reactions: nextRx,
+                                      myReactions: nextMy,
+                                    };
+                                    localStorage.setItem(
+                                      STORAGE_REACTIONS_CACHE,
+                                      JSON.stringify(cache)
+                                    );
+                                  } catch {}
+                                  return {
+                                    ...p,
+                                    reactions: nextRx,
+                                    myReactions: nextMy,
+                                  };
+                                })
+                              );
+                              // 2. Sync to Backend API
                               try {
                                 const res = await reactToPost(post._id, type);
+                                try {
+                                  const cache = getLocalRxCache();
+                                  cache[post._id] = {
+                                    reactions: res.reactions,
+                                    myReactions: res.myReactions,
+                                  };
+                                  localStorage.setItem(
+                                    STORAGE_REACTIONS_CACHE,
+                                    JSON.stringify(cache)
+                                  );
+                                } catch {}
                                 setPosts((prev) =>
                                   prev.map((p) =>
                                     p._id === post._id

@@ -1,6 +1,59 @@
 import { Request, Response, NextFunction } from 'express';
 
-// Sliding-window in-memory rate limiter per deviceId / IP
+// ============================================================================
+// 1. Express Security Headers & Anti-NoSQL-Injection Body Sanitizer
+// ============================================================================
+function stripMongoOperators(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(stripMongoOperators);
+  }
+  if (obj && typeof obj === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      // Prevent NoSQL operator injection ($gt, $ne, $where, prototype pollution)
+      if (
+        key.startsWith('$') ||
+        key.includes('.') ||
+        key === '__proto__' ||
+        key === 'constructor' ||
+        key === 'prototype'
+      ) {
+        continue;
+      }
+      cleaned[key] = stripMongoOperators(val);
+    }
+    return cleaned;
+  }
+  if (typeof obj === 'string') {
+    // Strip raw HTML script tags to prevent stored XSS
+    return obj.replace(/<\/?script[^>]*>/gi, '');
+  }
+  return obj;
+}
+
+export function securityMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  // Hardened HTTP Security Headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+
+  if (req.body && typeof req.body === 'object') {
+    req.body = stripMongoOperators(req.body);
+  }
+  if (req.query && typeof req.query === 'object') {
+    req.query = stripMongoOperators(req.query);
+  }
+  next();
+}
+
+// ============================================================================
+// 2. Sliding-Window In-Memory Rate Limiter per deviceId / IP
+// ============================================================================
 interface RateBucket {
   timestamps: number[];
 }

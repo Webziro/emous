@@ -12,7 +12,12 @@ import {
 } from '@shared/index';
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  window.location.hostname !== '127.0.0.1'
+    ? 'https://emous.onrender.com/api/v1'
+    : 'http://localhost:4000/api/v1');
 
 const STORAGE_DEVICE_KEY = 'emous_device_fingerprint_v1';
 const STORAGE_HANDLE_KEY = 'emous_user_handle_v1';

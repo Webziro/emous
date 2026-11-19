@@ -5,7 +5,9 @@
 
 export const BRAND = {
   name: 'emous',
-  domain: 'emous.app',
+  domain: 'emous.vercel.app',
+  apiBaseUrl: 'https://emous.onrender.com/api/v1',
+  webBaseUrl: 'https://emous.vercel.app',
   tagline: 'No Names. Just Real Talk.',
   inboxHook: '🤫 Drop your link on your socials & get anonymous confessions!',
   growthFooterText: 'Want to receive your own anonymous messages? Get emous Free',

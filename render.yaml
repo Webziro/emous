@@ -11,7 +11,7 @@ services:
       - key: PORT
         value: 4000
       - key: PUBLIC_DOMAIN
-        value: emous.app
+        value: emous.vercel.app
       - key: MONGODB_URI
         sync: false
       - key: UNSPLASH_ACCESS_KEY

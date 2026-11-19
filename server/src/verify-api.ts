@@ -35,7 +35,10 @@ async function runVerification() {
     });
     const identity = await initRes.json();
     assert.ok(identity.handle, 'Expected auto-generated handle');
-    assert.ok(identity.inboxLink.includes(`emous.app/ask/${identity.handle}`));
+    assert.ok(
+      identity.inboxLink.includes(`/ask/${identity.handle}`),
+      'Expected inboxLink to contain /ask/:handle'
+    );
     console.log(
       `✅ 2. Zero-Friction Identity assigned: @${identity.handle} (${identity.inboxLink})`
     );

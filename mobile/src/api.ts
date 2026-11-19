@@ -10,9 +10,12 @@ import {
   UserIdentityDTO,
 } from '../../shared';
 
-// Automatically points to localhost:4000 (or your LAN IP / Render production API URL)
+// Automatically points to live Render API (https://emous.onrender.com/api/v1) or custom EXPO_PUBLIC_API_URL
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  process.env.EXPO_PUBLIC_API_URL || 'https://emous.onrender.com/api/v1';
+
+export const WEB_BASE_URL =
+  process.env.EXPO_PUBLIC_WEB_URL || 'https://emous.vercel.app';
 
 let memoryDeviceId = '';
 let memoryHandle = '';

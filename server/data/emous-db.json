@@ -51,6 +51,58 @@
   ],
   "posts": [
     {
+      "_id": "48ca85529cb74721aaef4f62",
+      "authorDeviceId": "test-fingerprint-001",
+      "authorHandle": "CrimsonComet",
+      "content": "Testing hyperlocal 5-mile confession from downtown! 🔥",
+      "tag": "#WorkConfessions",
+      "tagLower": "#workconfessions",
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "reactions": {
+        "fire": 1,
+        "skull": 0,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [
+          "test-fingerprint-001"
+        ],
+        "skull": [],
+        "eyes": [],
+        "heart": []
+      },
+      "flagsCount": 3,
+      "flaggedBy": [
+        "flagger-user-1",
+        "flagger-user-2",
+        "flagger-user-3"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-11-19T06:32:11.628Z",
+      "updatedAt": "2026-11-19T06:32:11.751Z"
+    },
+    {
       "_id": "67cba7cb7ab04c768c0d68f8",
       "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
       "authorHandle": "GoldenWizard",
@@ -160,11 +212,13 @@
         ],
         "label": "Near You"
       },
-      "flagsCount": 0,
-      "flaggedBy": [],
+      "flagsCount": 1,
+      "flaggedBy": [
+        "web-3pbdu13r-mwbqrp0x"
+      ],
       "isHidden": false,
       "createdAt": "2026-11-11T06:49:06.159Z",
-      "updatedAt": "2026-11-11T06:49:06.159Z",
+      "updatedAt": "2026-11-18T17:15:16.783Z",
       "reactions": {
         "fire": 0,
         "skull": 0,
@@ -462,6 +516,21 @@
     }
   ],
   "inbox": [
+    {
+      "_id": "cde7424a4a004bb29a35b165",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Who is your secret crush at the studio? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": true,
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-19T06:32:11.773Z",
+      "updatedAt": "2026-11-19T06:32:11.794Z",
+      "reply": "Never telling 🤫🔥",
+      "repliedAt": "2026-11-19T06:32:11.794Z"
+    },
     {
       "_id": "9ac008a2961e47a1ab892af0",
       "recipientHandle": "GoldenWizard",

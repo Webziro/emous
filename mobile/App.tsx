@@ -50,6 +50,9 @@ import {
 
 const DEVICE_ID_STORAGE_KEY = '@emous_device_id_v1';
 const HANDLE_STORAGE_KEY = '@emous_handle_v1';
+const POSTS_CACHE_KEY = '@emous_posts_cache_v1';
+const INBOX_CACHE_KEY = '@emous_inbox_cache_v1';
+const REACTIONS_CACHE_KEY = '@emous_reactions_cache_v1';
 
 export default function App() {
   // Navigation Tab ('feed' | 'inbox')
@@ -120,7 +123,7 @@ export default function App() {
     })();
   }, []);
 
-  // Load Feed
+  // Load Feed (with AsyncStorage offline & reaction persistence)
   const loadFeed = useCallback(async () => {
     setLoadingFeed(true);
     try {
@@ -130,9 +133,30 @@ export default function App() {
         lat: coords.lat,
         lng: coords.lng,
       });
-      setPosts(list);
+      const rawRx = await AsyncStorage.getItem(REACTIONS_CACHE_KEY);
+      const rxCache = rawRx ? JSON.parse(rawRx) : {};
+      const merged = list.map((p) => {
+        const entry = rxCache[p._id];
+        return entry
+          ? {
+              ...p,
+              reactions: entry.reactions || p.reactions,
+              myReactions: entry.myReactions || p.myReactions,
+            }
+          : p;
+      });
+      setPosts(merged);
+      if (selectedTag === 'All') {
+        await AsyncStorage.setItem(
+          POSTS_CACHE_KEY,
+          JSON.stringify(merged.slice(0, 60))
+        );
+      }
     } catch {
-      // Keep existing state if offline
+      const cached = await AsyncStorage.getItem(POSTS_CACHE_KEY);
+      if (cached) {
+        setPosts(JSON.parse(cached));
+      }
     } finally {
       setLoadingFeed(false);
     }
@@ -142,19 +166,31 @@ export default function App() {
     loadFeed();
   }, [loadFeed]);
 
-  // Load Inbox
+  // Load Inbox (with AsyncStorage persistence & 8s real-time polling)
   const loadInbox = useCallback(async () => {
+    const inboxKey = `${INBOX_CACHE_KEY}_${currentHandle.toLowerCase()}`;
     try {
       const res = await fetchMobileInbox(currentHandle);
       setInboxMessages(res.messages);
       setUnreadCount(res.unreadCount);
+      await AsyncStorage.setItem(
+        inboxKey,
+        JSON.stringify(res.messages.slice(0, 80))
+      );
     } catch {
-      // Offline fallback
+      const cached = await AsyncStorage.getItem(inboxKey);
+      if (cached) {
+        setInboxMessages(JSON.parse(cached));
+      }
     }
   }, [currentHandle]);
 
   useEffect(() => {
     loadInbox();
+    const timer = setInterval(() => {
+      loadInbox();
+    }, 8000);
+    return () => clearInterval(timer);
   }, [loadInbox]);
 
   // Toggle "Near Me" (requests 5-mile radius GPS via expo-location)
@@ -468,6 +504,53 @@ export default function App() {
                           <TouchableOpacity
                             key={type}
                             onPress={async () => {
+                              // 1. Optimistic instant toggle + AsyncStorage persistence
+                              setPosts((prev) =>
+                                prev.map((p) => {
+                                  if (p._id !== post._id) return p;
+                                  const nextRx = {
+                                    ...(p.reactions || {
+                                      fire: 0,
+                                      skull: 0,
+                                      eyes: 0,
+                                      heart: 0,
+                                    }),
+                                  };
+                                  const nextMy = Array.isArray(p.myReactions)
+                                    ? [...p.myReactions]
+                                    : [];
+                                  const idx = nextMy.indexOf(type);
+                                  if (idx >= 0) {
+                                    nextMy.splice(idx, 1);
+                                    nextRx[type] = Math.max(
+                                      0,
+                                      (nextRx[type] || 1) - 1
+                                    );
+                                  } else {
+                                    nextMy.push(type);
+                                    nextRx[type] = (nextRx[type] || 0) + 1;
+                                  }
+                                  AsyncStorage.getItem(REACTIONS_CACHE_KEY)
+                                    .then((raw) => {
+                                      const cache = raw ? JSON.parse(raw) : {};
+                                      cache[post._id] = {
+                                        reactions: nextRx,
+                                        myReactions: nextMy,
+                                      };
+                                      return AsyncStorage.setItem(
+                                        REACTIONS_CACHE_KEY,
+                                        JSON.stringify(cache)
+                                      );
+                                    })
+                                    .catch(() => {});
+                                  return {
+                                    ...p,
+                                    reactions: nextRx,
+                                    myReactions: nextMy,
+                                  };
+                                })
+                              );
+                              // 2. Sync to live Render API
                               try {
                                 const res = await reactMobilePost(
                                   post._id,
