@@ -418,7 +418,18 @@ export default function EmousHomeApp() {
         lat: coords.lat,
         lng: coords.lng,
       });
-      setPosts((prev) => [created, ...prev]);
+      setPosts((prev) => {
+        const next = [created, ...prev];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              STORAGE_POSTS_CACHE,
+              JSON.stringify(next.slice(0, 60))
+            );
+          } catch {}
+        }
+        return next;
+      });
       setDraftContent('');
       setIsComposerOpen(false);
       showToast('🔥 Visual card dropped to the feed!');

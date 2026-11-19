@@ -10,9 +10,16 @@ import {
   UserIdentityDTO,
 } from '../../shared';
 
-// Automatically points to live Render API (https://emous.onrender.com/api/v1) or custom EXPO_PUBLIC_API_URL
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'https://emous.onrender.com/api/v1';
+function resolveMobileApiBase(): string {
+  const raw =
+    process.env.EXPO_PUBLIC_API_URL || 'https://emous.onrender.com/api/v1';
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/api/v1')) return trimmed;
+  if (trimmed.endsWith('/api')) return `${trimmed}/v1`;
+  return `${trimmed}/api/v1`;
+}
+
+export const API_BASE_URL = resolveMobileApiBase();
 
 export const WEB_BASE_URL =
   process.env.EXPO_PUBLIC_WEB_URL || 'https://emous.vercel.app';

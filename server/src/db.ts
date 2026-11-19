@@ -151,6 +151,31 @@ export function createId(): string {
   return randomUUID().replace(/-/g, '').slice(0, 24);
 }
 
+function sanitizeAndAutoEncodeMongoUri(rawUri: string): string {
+  // 1. Strip accidental leading/trailing quotes or whitespace from Render env var copy-paste
+  let uri = rawUri.trim().replace(/^["']+|["']+$/g, '').trim();
+
+  // 2. If user left literal <password> angle brackets around their password, strip the < and >
+  //    and URL-encode special characters (@, #, :, /, ?) inside the password portion
+  const match = uri.match(/^(mongodb(?:\+srv)?:\/\/)([^:]+):(.+)@([^@]+)$/);
+  if (match) {
+    const [, protocol, rawUser, rawPass, hostAndRest] = match;
+    const cleanUser = rawUser.replace(/^<|>$/g, '');
+    const cleanPass = rawPass.replace(/^<|>$/g, '');
+    // Only encode if not already percent-encoded
+    const encodedUser =
+      decodeURIComponent(cleanUser) === cleanUser
+        ? encodeURIComponent(cleanUser)
+        : cleanUser;
+    const encodedPass =
+      decodeURIComponent(cleanPass) === cleanPass
+        ? encodeURIComponent(cleanPass)
+        : cleanPass;
+    uri = `${protocol}${encodedUser}:${encodedPass}@${hostAndRest}`;
+  }
+  return uri;
+}
+
 export async function connectDatabase(): Promise<{
   mode: 'mongodb' | 'local-engine';
 }> {
@@ -158,7 +183,8 @@ export async function connectDatabase(): Promise<{
 
   if (configuredUri) {
     try {
-      await mongoose.connect(configuredUri, { serverSelectionTimeoutMS: 5000 });
+      const safeUri = sanitizeAndAutoEncodeMongoUri(configuredUri);
+      await mongoose.connect(safeUri, { serverSelectionTimeoutMS: 5000 });
       await Promise.all([
         UserModel.syncIndexes(),
         PostModel.syncIndexes(),
@@ -396,11 +422,12 @@ export async function seedInitialDataIfEmpty() {
     return;
   }
 
-  if (localStore.users.length > 0) return;
-  localStore.users = demoUsers;
-  localStore.posts = samplePosts;
-  localStore.inbox = sampleInbox;
-  saveLocalStore();
+  if (localStore.users.length === 0 || localStore.posts.length === 0) {
+    if (localStore.users.length === 0) localStore.users = demoUsers;
+    if (localStore.posts.length === 0) localStore.posts = samplePosts;
+    if (localStore.inbox.length === 0) localStore.inbox = sampleInbox;
+    saveLocalStore();
+  }
 }
 
 export async function disconnectDatabase() {
