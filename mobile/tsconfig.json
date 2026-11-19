@@ -4,7 +4,6 @@
     "module": "ESNext",
     "lib": ["DOM", "ESNext"],
     "jsx": "react-native",
-    "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

@@ -86,7 +86,9 @@ interface LocalDBState {
   inbox: LocalInboxDoc[];
 }
 
-const DATA_FILE = path.join(__dirname, '..', 'data', 'emous-db.json');
+const DATA_FILE = fs.existsSync(path.join(process.cwd(), 'data'))
+  ? path.join(process.cwd(), 'data', 'emous-db.json')
+  : path.join(process.cwd(), 'data', 'emous-db.json');
 
 export const localStore: LocalDBState = {
   users: [],

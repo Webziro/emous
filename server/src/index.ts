@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 import { connectDatabase } from './db';
 import { identityRouter } from './routes/identity';
@@ -11,9 +12,24 @@ import { BRAND } from '../../shared';
 
 dotenv.config();
 
+function resolvePublicDir(): string {
+  const candidates = [
+    path.join(process.cwd(), 'public'),
+    path.join(process.cwd(), 'server', 'public'),
+    path.join(__dirname, '..', 'public'),
+    path.join(__dirname, '..', '..', '..', 'public'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(process.cwd(), 'public');
+}
+
 export function createApp() {
   const app = express();
-  const publicDir = path.join(__dirname, '..', 'public');
+  const publicDir = resolvePublicDir();
 
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
@@ -50,18 +66,19 @@ export function createApp() {
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 4000;
+  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
   const webPort = Number(process.env.WEB_PORT) || 3000;
   const app = createApp();
 
   connectDatabase()
     .then(({ mode }) => {
-      app.listen(port, () => {
+      app.listen(port, '0.0.0.0', () => {
         console.log(
-          `🚀 emous Unified API + Web Server running at http://localhost:${port} (DB mode: ${mode})`
+          `🚀 emous Unified API + Web Server running on port ${port} (DB mode: ${mode})`
         );
       });
 
-      if (webPort !== port) {
+      if (!isProd && webPort !== port) {
         app
           .listen(webPort, () => {
             console.log(
