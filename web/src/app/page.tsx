@@ -1148,31 +1148,29 @@ export default function EmousHomeApp() {
       </header>
 
       {/* =====================================================================
-          SCREEN 1: THE VISUAL FEED (Dynamic Tags & 5-Mile Near Me Toggle)
+          SCREEN 1: THE VISUAL FEED ("Dare to Speak!" & 5-Mile Near Me Toggle)
          ===================================================================== */}
       {activeScreen === 'feed' && (
         <main className="max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-4 sm:space-y-5">
           {/* Feed Mode Toggle Switch + Active GPS / Filter Bar */}
           <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flyer-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] sm:text-[10px] uppercase px-2 py-0.5 rounded border border-black">
-                  DYNAMIC AUTO-CATEGORIZED FEED
-                </span>
-                <span className="text-[10px] font-bold text-emous-lime">
-                  • Auto-Refreshes every 10s
-                </span>
-              </div>
-              <h1 className="font-display font-extrabold text-lg sm:text-3xl text-white leading-tight">
+              <h1 className="font-display font-extrabold text-xl sm:text-3xl text-white leading-tight">
                 {feedMode === 'global'
-                  ? '🌐 Global Anonymous Feed'
+                  ? 'Dare to Speak!'
                   : '📍 Near Me (5-Mile Radius)'}
               </h1>
-              {selectedPhrase && (
+              {(selectedPhrase || selectedTag !== 'All') && (
                 <div className="mt-1.5 inline-flex items-center gap-2 bg-emous-pink text-white text-xs font-extrabold px-3 py-1 rounded-full border-2 border-black">
-                  <span>🔍 Filtering by phrase: “{selectedPhrase}”</span>
+                  <span>
+                    🔍 Filtering by:{' '}
+                    {selectedPhrase ? selectedPhrase : selectedTag}
+                  </span>
                   <button
-                    onClick={() => setSelectedPhrase('')}
+                    onClick={() => {
+                      setSelectedPhrase('');
+                      setSelectedTag('All');
+                    }}
                     className="bg-black text-white px-1.5 rounded-full text-[10px]"
                   >
                     ✕
@@ -1198,7 +1196,7 @@ export default function EmousHomeApp() {
                 }`}
               >
                 <Globe className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Global Tags</span>
+                <span className="truncate">Global Feed</span>
               </button>
               <button
                 onClick={handleSelectNearMe}
@@ -1211,44 +1209,6 @@ export default function EmousHomeApp() {
                 <MapPin className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Near Me (5mi)</span>
               </button>
-            </div>
-          </div>
-
-          {/* Dynamic Auto-Scrolling Hashtag Ticker Bar (Computed from actual posts & NLP topics) */}
-          <div
-            className="tag-marquee-viewport no-scrollbar"
-            title="Hover to pause dynamic scrolling tags"
-          >
-            <div className="tag-marquee-track">
-              {[...['All', ...dynamicTags], ...['All', ...dynamicTags]].map(
-                (tag, idx) => {
-                  const active = selectedTag === tag && !selectedPhrase;
-                  const stat = trendingTags.find(
-                    (t) => t.tag.toLowerCase() === tag.toLowerCase()
-                  );
-                  return (
-                    <button
-                      key={`${tag}-${idx}`}
-                      onClick={() => {
-                        setSelectedTag(tag);
-                        setSelectedPhrase('');
-                      }}
-                      className={`shrink-0 px-3.5 py-1.5 sm:py-2 rounded-full font-display font-extrabold text-[11px] sm:text-xs uppercase flyer-btn inline-flex items-center gap-1.5 ${
-                        active
-                          ? 'bg-emous-yellow text-black'
-                          : 'bg-emous-surface text-white hover:bg-neutral-800'
-                      }`}
-                    >
-                      <span>{tag}</span>
-                      {stat && stat.count > 0 && (
-                        <span className="bg-black/80 text-emous-lime text-[9px] px-1.5 py-0.2 rounded-full">
-                          {stat.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                }
-              )}
             </div>
           </div>
 
@@ -1458,129 +1418,98 @@ export default function EmousHomeApp() {
       )}
 
       {/* =====================================================================
-          NEW TAB: DEDICATED 📈 TRENDING RADAR (Dynamic Tags & Frequent Phrases)
+          NEW TAB: TWITTER (X) STYLE 📈 TRENDING LIST (1 Keyword Per Row, No Boxes)
          ===================================================================== */}
       {activeScreen === 'trending' && (
-        <main className="max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-6">
-          {/* Trending Hero & Time Window Switcher */}
-          <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-4 sm:p-6 flyer-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded border border-black mb-1">
-                📈 LIVE NLP TRENDING RADAR
-              </span>
-              <h1 className="font-display font-extrabold text-xl sm:text-3xl text-white">
-                What Everyone Is Confessing About
-              </h1>
-              <p className="text-xs text-neutral-300 font-semibold mt-0.5">
-                Auto-categorized by hashtags & frequently used phrases (“work”,
-                “office”, “crypto”, “sex”, “gym”, “politics”, “religion”...)
-              </p>
-            </div>
+        <main className="max-w-2xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6">
+          <div className="bg-emous-surface rounded-2xl sm:rounded-3xl flyer-card overflow-hidden">
+            {/* Twitter (X) Style Sticky Header & Period Tabs */}
+            <div className="px-4 sm:px-5 pt-4 pb-3 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="font-display font-extrabold text-lg sm:text-xl text-white">
+                  Trends for you
+                </h1>
+                <p className="text-[11px] text-neutral-400 font-medium">
+                  Frequently used topics & keywords on emous
+                </p>
+              </div>
 
-            <div className="bg-black p-1 rounded-xl border-2 border-white/15 inline-flex gap-1 shrink-0">
-              {(
-                [
-                  { id: '24h', label: '🔥 24 Hours' },
-                  { id: '7d', label: '⚡ 7 Days' },
-                  { id: 'all', label: '🌐 All Time' },
-                ] as const
-              ).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setTrendingPeriod(p.id)}
-                  className={`px-3 py-1.5 rounded-lg font-display font-extrabold text-xs uppercase ${
-                    trendingPeriod === p.id
-                      ? 'bg-emous-lime text-black'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Section 1: Trending Dynamic Hashtag Categories Leaderboard */}
-          <div className="space-y-3">
-            <h2 className="font-display font-extrabold text-lg sm:text-xl flex items-center gap-2">
-              <span>🏷️ Trending Topic Categories</span>
-              <span className="text-xs text-neutral-400 font-sans font-bold">
-                (Click any category to read confessions)
-              </span>
-            </h2>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
-              {trendingTags.map((item, idx) => (
-                <button
-                  key={item.tag}
-                  onClick={() => {
-                    setSelectedTag(item.tag);
-                    setSelectedPhrase('');
-                    setActiveScreen('feed');
-                  }}
-                  className="bg-emous-surface hover:bg-neutral-800 text-left rounded-2xl p-4 flyer-card flex flex-col justify-between gap-2 transition-transform hover:-translate-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-black">
-                      #{idx + 1} TRENDING
-                    </span>
-                    <span className="text-xs font-extrabold text-emous-lime">
-                      🔥 {item.reactionsCount}
-                    </span>
-                  </div>
-                  <p className="font-display font-extrabold text-base sm:text-lg text-white truncate">
-                    {item.tag}
-                  </p>
-                  <p className="text-[11px] font-bold text-neutral-400">
-                    {item.count} {item.count === 1 ? 'confession' : 'confessions'}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Section 2: Frequently Used Words & Phrases Cloud */}
-          <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-5 flyer-card space-y-4">
-            <div>
-              <span className="bg-emous-pink text-white font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full border border-black">
-                💬 FREQUENTLY USED PHRASES & KEYWORDS
-              </span>
-              <h2 className="font-display font-extrabold text-lg sm:text-2xl mt-1">
-                Hot Words Detected Inside Confessions
-              </h2>
-              <p className="text-xs text-neutral-400 font-semibold">
-                Tap any word below to filter the anonymous feed by that keyword
-                or phrase:
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2.5">
-              {trendingPhrases.map((item, idx) => {
-                const isTop3 = idx < 3;
-                return (
+              <div className="inline-flex bg-black/70 p-1 rounded-xl border border-white/10 self-start sm:self-auto">
+                {(
+                  [
+                    { id: '24h', label: '24h' },
+                    { id: '7d', label: '7d' },
+                    { id: 'all', label: 'All Time' },
+                  ] as const
+                ).map((p) => (
                   <button
-                    key={item.phrase}
-                    onClick={() => {
-                      setSelectedTag('All');
-                      setSelectedPhrase(item.phrase);
-                      setActiveScreen('feed');
-                    }}
-                    className={`px-3.5 py-2 rounded-2xl flyer-btn inline-flex items-center gap-2 ${
-                      isTop3
+                    key={p.id}
+                    onClick={() => setTrendingPeriod(p.id)}
+                    className={`px-3 py-1 rounded-lg font-display font-extrabold text-[11px] transition-colors ${
+                      trendingPeriod === p.id
                         ? 'bg-emous-lime text-black'
-                        : 'bg-black text-white hover:bg-emous-yellow hover:text-black'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    <span className="font-display font-extrabold text-xs sm:text-sm uppercase">
-                      “{item.phrase}”
-                    </span>
-                    {item.category && (
-                      <span className="text-[10px] font-extrabold opacity-75">
-                        {item.category}
-                      </span>
-                    )}
-                    <span className="bg-emous-pink text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full border border-black">
-                      {item.count}
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Twitter (X) Style Clean Vertical Trend Rows (No boxes around keywords) */}
+            <div className="divide-y divide-white/10">
+              {(trendingPhrases.length > 0
+                ? trendingPhrases
+                : trendingTags.map((t) => ({
+                    phrase: t.tag,
+                    category: `${t.tag.replace(/^#/, '')} • Topic`,
+                    count: t.count,
+                    score: t.score,
+                  }))
+              ).map((item, idx) => {
+                const categoryName = (item.category || '#Confessions').replace(
+                  /^#/,
+                  ''
+                );
+                const keywordDisplay = item.phrase.startsWith('#')
+                  ? item.phrase
+                  : item.phrase.charAt(0).toUpperCase() + item.phrase.slice(1);
+
+                return (
+                  <button
+                    key={`${item.phrase}-${idx}`}
+                    onClick={() => {
+                      if (item.phrase.startsWith('#')) {
+                        setSelectedTag(item.phrase);
+                        setSelectedPhrase('');
+                      } else {
+                        setSelectedTag('All');
+                        setSelectedPhrase(item.phrase.toLowerCase());
+                      }
+                      setActiveScreen('feed');
+                    }}
+                    className="w-full text-left px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] transition-colors flex items-start justify-between gap-3 group"
+                  >
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-[11px] sm:text-xs text-neutral-400 font-medium flex items-center gap-1.5">
+                        <span>{idx + 1}</span>
+                        <span>·</span>
+                        <span>{categoryName}</span>
+                        <span>·</span>
+                        <span>Trending</span>
+                      </p>
+                      <p className="font-sans font-extrabold text-sm sm:text-base text-white group-hover:text-emous-lime transition-colors truncate">
+                        {keywordDisplay}
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-neutral-400 font-medium">
+                        {item.count}{' '}
+                        {item.count === 1 ? 'confession' : 'confessions'}
+                      </p>
+                    </div>
+
+                    <span className="text-neutral-500 group-hover:text-white text-sm font-bold px-1.5 py-0.5 rounded-full">
+                      •••
                     </span>
                   </button>
                 );

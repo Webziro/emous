@@ -545,15 +545,9 @@ export function classifyPostTopics(
   categoryScores.sort((a, b) => b.score - a.score);
   const matchedCategories = categoryScores.map((c) => c.tag);
 
-  // 3. Also extract notable 4+ letter words for Trending Phrases
-  const rawWords = textLower
-    .replace(/#[a-z0-9_]+/g, ' ')
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length >= 4 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
-
-  for (const w of rawWords.slice(0, 12)) {
-    detectedKeywords.add(w);
+  // 3. Only track curated topic keywords + explicit #hashtags (no random filler words!)
+  for (const h of inlineHashtags) {
+    detectedKeywords.add(h);
   }
 
   // 4. Determine primaryTag:

@@ -371,7 +371,7 @@ export default function App() {
          =================================================================== */}
       {activeTab === 'feed' && (
         <View style={{ flex: 1 }}>
-          {/* Dual-Feed Toggle Switch ("Global Tags" vs "Near Me") */}
+          {/* Dual-Feed Toggle Switch ("Dare to Speak!" vs "Near Me") */}
           <View style={styles.feedToggleContainer}>
             <TouchableOpacity
               onPress={() => setFeedMode('global')}
@@ -386,7 +386,7 @@ export default function App() {
                   feedMode === 'global' && { color: COLORS.textDark },
                 ]}
               >
-                🌐 GLOBAL TAGS
+                🔥 DARE TO SPEAK!
               </Text>
             </TouchableOpacity>
 
@@ -406,41 +406,6 @@ export default function App() {
                 📍 NEAR ME (5 MI)
               </Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Auto-Scrolling Streetwear Hashtag Filter Ticker */}
-          <View style={{ height: 48, marginBottom: 8, overflow: 'hidden' }}>
-            <Animated.View
-              style={[
-                styles.tagScroll,
-                { transform: [{ translateX: marqueeAnim }] },
-              ]}
-            >
-              {[...['All', ...POPULAR_TAGS], ...['All', ...POPULAR_TAGS]].map(
-                (tag, idx) => {
-                  const isSelected = selectedTag === tag;
-                  return (
-                    <TouchableOpacity
-                      key={`${tag}-${idx}`}
-                      onPress={() => setSelectedTag(tag)}
-                      style={[
-                        styles.tagFilterPill,
-                        isSelected && { backgroundColor: COLORS.accentYellow },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.tagFilterText,
-                          isSelected && { color: COLORS.textDark },
-                        ]}
-                      >
-                        {tag}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </Animated.View>
           </View>
 
           {/* Scrollable Visual Feed Cards */}

@@ -146,8 +146,16 @@ function computeTrendingFromPosts(
     for (const kw of keywords) {
       const cleanKw = kw.toLowerCase().trim();
       if (cleanKw.length < 2) continue;
+      // Only include curated topic keywords or explicit #hashtags (no random words)
+      const isCuratedKeyword = Boolean(keywordToCategory[cleanKw]);
+      const isExplicitHashtag = cleanKw.startsWith('#');
+      if (!isCuratedKeyword && !isExplicitHashtag) continue;
+
+      const displayPhrase = isExplicitHashtag
+        ? kw.trim()
+        : cleanKw.charAt(0).toUpperCase() + cleanKw.slice(1);
       const existing = phraseMap.get(cleanKw) || {
-        phrase: cleanKw,
+        phrase: displayPhrase,
         category: keywordToCategory[cleanKw] || analyzed.primaryTag,
         count: 0,
         reactionsCount: 0,

@@ -51,6 +51,68 @@
   ],
   "posts": [
     {
+      "_id": "9382b068b4504352a0b5e227",
+      "authorDeviceId": "test-fingerprint-001",
+      "authorHandle": "CrimsonComet",
+      "content": "My boss at the office made us stay late for a 5PM standup meeting! 🔥",
+      "tag": "#Work",
+      "tagLower": "#work",
+      "categories": [
+        "#Work"
+      ],
+      "keywords": [
+        "office",
+        "boss",
+        "meeting",
+        "standup"
+      ],
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "reactions": {
+        "fire": 0,
+        "skull": 1,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [
+          "test-fingerprint-001"
+        ],
+        "eyes": [],
+        "heart": []
+      },
+      "comments": [],
+      "flagsCount": 3,
+      "flaggedBy": [
+        "flagger-user-1",
+        "flagger-user-2",
+        "flagger-user-3"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-11-20T11:32:32.395Z",
+      "updatedAt": "2026-11-20T11:32:32.578Z"
+    },
+    {
       "_id": "c603bce6bd984bb5a98f65f9",
       "authorDeviceId": "test-fingerprint-001",
       "authorHandle": "CrimsonComet",
@@ -64,10 +126,7 @@
         "office",
         "boss",
         "meeting",
-        "standup",
-        "made",
-        "stay",
-        "late"
+        "standup"
       ],
       "background": {
         "id": "grad-neon-riot",
@@ -169,13 +228,7 @@
       "categories": [
         "#Work"
       ],
-      "keywords": [
-        "testing",
-        "hyperlocal",
-        "5-mile",
-        "confession",
-        "downtown"
-      ],
+      "keywords": [],
       "comments": []
     },
     {
@@ -226,11 +279,7 @@
       ],
       "keywords": [
         "campus",
-        "student",
-        "most",
-        "lite",
-        "ready",
-        "conversation"
+        "student"
       ],
       "comments": []
     },
@@ -278,13 +327,7 @@
       "categories": [
         "#UnpopularOpinion"
       ],
-      "keywords": [
-        "women",
-        "find",
-        "things",
-        "easier",
-        "advantage"
-      ],
+      "keywords": [],
       "comments": []
     },
     {
@@ -336,12 +379,7 @@
       ],
       "keywords": [
         "hr",
-        "confession",
-        "make",
-        "beautiful",
-        "anytime",
-        "speaks",
-        "rearly"
+        "#Workconfessions"
       ],
       "comments": []
     },
@@ -397,13 +435,7 @@
       "categories": [
         "#Work"
       ],
-      "keywords": [
-        "testing",
-        "hyperlocal",
-        "5-mile",
-        "confession",
-        "downtown"
-      ],
+      "keywords": [],
       "comments": []
     },
     {
@@ -460,12 +492,7 @@
         "standup",
         "rooftop",
         "margaritas",
-        "tacos",
-        "told",
-        "wi-fi",
-        "crashed",
-        "during",
-        "line"
+        "tacos"
       ],
       "comments": []
     },
@@ -520,18 +547,7 @@
       ],
       "keywords": [
         "warehouse",
-        "2am",
-        "whoever",
-        "wearing",
-        "vintage",
-        "neon",
-        "green",
-        "puffer",
-        "last",
-        "night",
-        "locked",
-        "eyes",
-        "times"
+        "2am"
       ],
       "comments": []
     },
@@ -586,15 +602,7 @@
       "keywords": [
         "3am",
         "diner",
-        "fries",
-        "unpopular",
-        "opinion",
-        "squad",
-        "100x",
-        "harder",
-        "reservation",
-        "spot",
-        "city"
+        "fries"
       ],
       "comments": []
     },
@@ -649,12 +657,7 @@
       ],
       "keywords": [
         "project",
-        "final",
-        "entire",
-        "group",
-        "wrote",
-        "slides",
-        "google"
+        "final"
       ],
       "comments": []
     },
@@ -706,19 +709,28 @@
       "categories": [
         "#SexAndDating"
       ],
-      "keywords": [
-        "playlist",
-        "secretly",
-        "named",
-        "after",
-        "talked",
-        "weeks",
-        "october"
-      ],
+      "keywords": [],
       "comments": []
     }
   ],
   "inbox": [
+    {
+      "_id": "b148c888807e41a8a110d383",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Who is your secret crush at the studio? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": true,
+      "burnAfterReading": false,
+      "senderHint": "💻 Sent from Web Browser • ⚡ Daytime Lurker",
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-20T11:32:32.641Z",
+      "updatedAt": "2026-11-20T11:32:32.652Z",
+      "reply": "Never telling 🤫🔥",
+      "repliedAt": "2026-11-20T11:32:32.652Z"
+    },
     {
       "_id": "91e428a2789749ba9c6cc288",
       "recipientHandle": "GoldenWizard",

@@ -125,14 +125,8 @@ export function reloadLocalStoreFromDiskIfNeeded(force = false) {
           ...p,
           tag: analyzed.primaryTag,
           tagLower: analyzed.primaryTag.toLowerCase(),
-          categories:
-            Array.isArray(p.categories) && p.categories.length > 0
-              ? p.categories
-              : analyzed.matchedCategories,
-          keywords:
-            Array.isArray(p.keywords) && p.keywords.length > 0
-              ? p.keywords
-              : analyzed.keywords,
+          categories: analyzed.matchedCategories,
+          keywords: analyzed.keywords,
           reactions: p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 },
           reactedBy: p.reactedBy || { fire: [], skull: [], eyes: [], heart: [] },
           comments: Array.isArray(p.comments) ? p.comments : [],

@@ -1392,101 +1392,88 @@
     }
 
     function renderTrendingScreen() {
-      const compact = isCompactMobile();
       const tags = state.trendingTags || [];
       const phrases = state.trendingPhrases || [];
+      const trendList =
+        phrases.length > 0
+          ? phrases
+          : tags.map((t) => ({
+              phrase: t.tag,
+              category: t.tag,
+              count: t.count,
+              score: t.score
+            }));
 
       return `
-        <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-5">
-          <div class="bg-emous-surface rounded-2xl p-4 flyer-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <main class="max-w-2xl mx-auto px-3 pt-3.5">
+          <div class="bg-emous-surface rounded-2xl flyer-card overflow-hidden">
+            <!-- Twitter (X) Style Header & Period Switcher -->
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.1);" class="p-4 flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h1 class="font-display font-extrabold text-lg text-white">
+                  Trends for you
+                </h1>
+                <p class="text-[11px] text-neutral-400 font-bold">
+                  Frequently used topics & keywords on emous
+                </p>
+              </div>
+
+              <div class="bg-black p-1 rounded-xl border border-white/15 inline-flex gap-1 shrink-0">
+                ${[
+                  { id: '24h', label: '24h' },
+                  { id: '7d', label: '7d' },
+                  { id: 'all', label: 'All Time' }
+                ]
+                  .map(
+                    (p) => `
+                  <button
+                    onclick="state.trendingPeriod = '${p.id}'; loadTrending();"
+                    class="px-2.5 py-1 rounded-lg font-display font-extrabold text-[10px] ${
+                      state.trendingPeriod === p.id ? 'bg-emous-lime text-black' : 'text-neutral-400 hover:text-white'
+                    }"
+                  >
+                    ${p.label}
+                  </button>
+                `
+                  )
+                  .join('')}
+              </div>
+            </div>
+
+            <!-- Twitter (X) Style Clean Vertical Trend Rows (1 Keyword per row, no boxes) -->
             <div>
-              <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] uppercase px-2 py-0.5 rounded border border-black mb-1">
-                📈 LIVE NLP TRENDING RADAR
-              </span>
-              <h1 class="font-display font-extrabold ${compact ? 'text-lg' : 'text-2xl'} text-white">
-                What Everyone Is Confessing About
-              </h1>
-              <p class="text-[11px] text-neutral-300 font-bold">
-                Categorized dynamically by hashtags & frequent phrases ("work", "office", "crypto", "sex", "gym", "politics", "religion"...)
-              </p>
-            </div>
+              ${trendList
+                .map((item, idx) => {
+                  const categoryName = String(item.category || '#Confessions').replace(/^#/, '');
+                  const rawWord = String(item.phrase || '');
+                  const keywordDisplay = rawWord.startsWith('#')
+                    ? rawWord
+                    : rawWord.charAt(0).toUpperCase() + rawWord.slice(1);
+                  const clickHandler = rawWord.startsWith('#')
+                    ? `handleSelectTag('${escapeHtml(rawWord)}')`
+                    : `handleSelectPhrase('${escapeHtml(rawWord.toLowerCase())}')`;
 
-            <div class="bg-black p-1 rounded-xl border-2 border-white/15 inline-flex gap-1 shrink-0">
-              ${[
-                { id: '24h', label: '🔥 24h' },
-                { id: '7d', label: '⚡ 7d' },
-                { id: 'all', label: '🌐 All' }
-              ]
-                .map(
-                  (p) => `
-                <button
-                  onclick="state.trendingPeriod = '${p.id}'; loadTrending();"
-                  class="px-2.5 py-1.5 rounded-lg font-display font-extrabold text-[10px] uppercase ${
-                    state.trendingPeriod === p.id ? 'bg-emous-lime text-black' : 'text-neutral-400 hover:text-white'
-                  }"
-                >
-                  ${p.label}
-                </button>
-              `
-                )
-                .join('')}
-            </div>
-          </div>
-
-          <!-- Trending Categories Leaderboard -->
-          <div class="space-y-2.5">
-            <h2 class="font-display font-extrabold text-sm sm:text-lg text-white">
-              🏷️ Trending Topic Categories (Tap to view confessions)
-            </h2>
-            <div class="grid ${compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'} gap-3">
-              ${tags
-                .map(
-                  (item, idx) => `
-                <button
-                  onclick="handleSelectTag('${escapeHtml(item.tag)}')"
-                  class="bg-emous-surface hover:bg-neutral-800 text-left rounded-2xl p-3.5 flyer-card flex flex-col justify-between gap-1.5"
-                >
-                  <div class="flex items-center justify-between">
-                    <span class="bg-emous-yellow text-black font-display font-extrabold text-[9px] px-2 py-0.5 rounded border border-black">
-                      #${idx + 1} HOT
-                    </span>
-                    <span class="text-[11px] font-extrabold text-emous-lime">🔥 ${item.reactionsCount}</span>
-                  </div>
-                  <p class="font-display font-extrabold text-sm sm:text-base text-white truncate">${escapeHtml(item.tag)}</p>
-                  <p class="text-[10px] font-bold text-neutral-400">${item.count} confessions</p>
-                </button>
-              `
-                )
-                .join('')}
-            </div>
-          </div>
-
-          <!-- Trending Phrases & Keywords Cloud -->
-          <div class="bg-emous-surface rounded-2xl p-4 flyer-card space-y-3">
-            <div>
-              <span class="bg-emous-pink text-white font-display font-extrabold text-[9px] uppercase px-2.5 py-0.5 rounded-full border border-black">
-                💬 FREQUENTLY USED PHRASES & KEYWORDS
-              </span>
-              <h2 class="font-display font-extrabold text-base sm:text-xl mt-1">
-                Hot Words Detected Inside Confessions
-              </h2>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-              ${phrases
-                .map(
-                  (item, idx) => `
-                <button
-                  onclick="handleSelectPhrase('${escapeHtml(item.phrase)}')"
-                  class="px-3 py-1.5 rounded-xl flyer-btn inline-flex items-center gap-1.5 ${
-                    idx < 3 ? 'bg-emous-lime text-black' : 'bg-black text-white hover:bg-emous-yellow hover:text-black'
-                  }"
-                >
-                  <span class="font-display font-extrabold text-xs uppercase">“${escapeHtml(item.phrase)}”</span>
-                  <span class="bg-emous-pink text-white text-[9px] font-extrabold px-1.5 rounded-full border border-black">${item.count}</span>
-                </button>
-              `
-                )
+                  return `
+                    <button
+                      onclick="${clickHandler}"
+                      style="border-bottom: 1px solid rgba(255,255,255,0.08);"
+                      class="w-full text-left px-4 py-3 hover:bg-neutral-800 transition-colors flex items-start justify-between gap-3"
+                    >
+                      <div class="min-w-0 space-y-0.5">
+                        <p class="text-[11px] text-neutral-400 font-bold">
+                          ${idx + 1} · ${escapeHtml(categoryName)} · Trending
+                        </p>
+                        <p class="font-sans font-extrabold text-sm sm:text-base text-white truncate">
+                          ${escapeHtml(keywordDisplay)}
+                        </p>
+                        <p class="text-[11px] text-neutral-400 font-bold">
+                          ${item.count} ${item.count === 1 ? 'confession' : 'confessions'}
+                        </p>
+                      </div>
+                      <span class="text-neutral-500 text-xs font-extrabold px-1">•••</span>
+                    </button>
+                  `;
+                })
                 .join('')}
             </div>
           </div>
@@ -1640,15 +1627,20 @@
             <!-- SCREEN 1: THE APP HOME FEED -->
             <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-3.5">
               <!-- Top Banner with Get My Link + Dual-Feed Toggle -->
-              <div class="bg-emous-surface rounded-2xl p-3 flyer-card space-y-2.5">
+              <div class="bg-emous-surface rounded-2xl p-3.5 flyer-card space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
                   <div class="min-w-0">
-                    <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[8px] uppercase px-2 py-0.5 rounded border border-black mb-0.5">
-                      ZERO-LOGIN FEED • SAFETY SHIELD ON
-                    </span>
-                    <h1 class="font-display font-extrabold ${compact ? 'text-base' : 'text-xl sm:text-2xl'} text-white leading-tight truncate">
-                      ${state.feedMode === 'global' ? '🌐 Global Tags Feed' : '📍 Near Me (5mi)'}
+                    <h1 class="font-display font-extrabold ${compact ? 'text-lg' : 'text-2xl sm:text-3xl'} text-white leading-tight truncate">
+                      ${state.feedMode === 'global' ? 'Dare to Speak!' : '📍 Near Me (5mi)'}
                     </h1>
+                    ${
+                      state.selectedPhrase || state.selectedTag !== 'All'
+                        ? `<div class="mt-1 inline-flex items-center gap-1.5 bg-emous-pink text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-black">
+                            <span>🔍 ${escapeHtml(state.selectedPhrase || state.selectedTag)}</span>
+                            <button onclick="state.selectedPhrase=''; state.selectedTag='All'; loadFeed();" class="bg-black text-white px-1.5 rounded-full">✕</button>
+                          </div>`
+                        : ''
+                    }
                   </div>
 
                   <button
@@ -1667,7 +1659,7 @@
                       state.feedMode === 'global' ? 'bg-emous-lime text-black shadow-brutal' : 'text-neutral-400 hover:text-white'
                     }"
                   >
-                    🌐 Global Tags
+                    🌐 Global Feed
                   </button>
                   <button
                     onclick="handleToggleFeedMode('near')"
@@ -1679,9 +1671,6 @@
                   </button>
                 </div>
               </div>
-
-              <!-- Auto-Scrolling Streetwear Hashtag Ticker Bar -->
-              ${renderScrollingTagBar()}
 
               <!-- Visual Cards Grid -->
               <div class="grid ${gridColsClass}">
