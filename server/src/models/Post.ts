@@ -1,12 +1,23 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { CardBackground } from '../../../shared';
 
+export interface IPostComment {
+  _id: string;
+  authorHandle: string;
+  authorDeviceId?: string;
+  text: string;
+  isOp?: boolean;
+  createdAt: Date;
+}
+
 export interface IPost extends Document {
   authorDeviceId: string;
   authorHandle: string;
   content: string;
   tag: string;
   tagLower: string;
+  categories: string[];
+  keywords: string[];
   background: CardBackground;
   location?: {
     type: 'Point';
@@ -25,6 +36,7 @@ export interface IPost extends Document {
     eyes: string[];
     heart: string[];
   };
+  comments: IPostComment[];
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -61,6 +73,16 @@ const PostSchema = new Schema<IPost>(
       lowercase: true,
       index: true,
     },
+    categories: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    keywords: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     background: {
       id: { type: String, required: true },
       type: { type: String, enum: ['gradient', 'image'], required: true },
@@ -95,6 +117,19 @@ const PostSchema = new Schema<IPost>(
       skull: { type: [String], default: [] },
       eyes: { type: [String], default: [] },
       heart: { type: [String], default: [] },
+    },
+    comments: {
+      type: [
+        {
+          _id: { type: String, required: true },
+          authorHandle: { type: String, required: true },
+          authorDeviceId: { type: String },
+          text: { type: String, required: true, maxlength: 180 },
+          isOp: { type: Boolean, default: false },
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
     },
     flagsCount: {
       type: Number,

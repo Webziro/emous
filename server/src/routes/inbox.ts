@@ -32,6 +32,8 @@ function formatInboxMessage(doc: any) {
     repliedAt: doc.repliedAt,
     themeId: doc.themeId || 'story-pink-lime',
     isRead: Boolean(doc.isRead),
+    burnAfterReading: Boolean(doc.burnAfterReading),
+    senderHint: doc.senderHint || 'Sent from Mobile Web • Local Vibe',
     flagsCount: doc.flagsCount || 0,
     isHidden: Boolean(doc.isHidden),
     createdAt: doc.createdAt,
@@ -166,6 +168,22 @@ inboxRouter.post(
     const requestedTheme = req.body?.themeId;
     const randomTheme =
       STORY_COLOR_PAIRS[Math.floor(Math.random() * STORY_COLOR_PAIRS.length)].id;
+    const burnAfterReading = Boolean(req.body?.burnAfterReading);
+    const ua = String(req.headers['user-agent'] || '').toLowerCase();
+    const deviceHint = ua.includes('iphone')
+      ? '📱 Sent from iPhone'
+      : ua.includes('android')
+      ? '🤖 Sent from Android'
+      : '💻 Sent from Web Browser';
+    const hour = new Date().getHours();
+    const timeVibe =
+      hour >= 22 || hour <= 4
+        ? '🌙 Late Night Owl'
+        : hour < 12
+        ? '☀️ Morning Confessor'
+        : '⚡ Daytime Lurker';
+    const senderHint =
+      (req.body?.senderHint as string) || `${deviceHint} • ${timeVibe}`;
 
     if (isUsingMongo()) {
       const existingUser = await UserModel.findOne({
@@ -180,6 +198,8 @@ inboxRouter.post(
         question,
         themeId: requestedTheme || randomTheme,
         isRead: false,
+        burnAfterReading,
+        senderHint,
         flagsCount: 0,
         flaggedBy: [],
         isHidden: false,
@@ -207,6 +227,8 @@ inboxRouter.post(
       question,
       themeId: requestedTheme || randomTheme,
       isRead: false,
+      burnAfterReading,
+      senderHint,
       flagsCount: 0,
       flaggedBy: [] as string[],
       isHidden: false,

@@ -8,6 +8,7 @@ import { InboxMessageModel } from './models/InboxMessage';
 import {
   BRAND,
   CardBackground,
+  classifyPostTopics,
   CURATED_GRADIENTS,
   CURATED_UNSPLASH_IMAGES,
 } from '../../shared';
@@ -38,6 +39,8 @@ export interface LocalPostDoc {
   content: string;
   tag: string;
   tagLower: string;
+  categories?: string[];
+  keywords?: string[];
   background: CardBackground;
   location?: {
     type: 'Point';
@@ -56,6 +59,14 @@ export interface LocalPostDoc {
     eyes: string[];
     heart: string[];
   };
+  comments?: {
+    _id: string;
+    authorHandle: string;
+    authorDeviceId?: string;
+    text: string;
+    isOp?: boolean;
+    createdAt: string;
+  }[];
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -73,6 +84,8 @@ export interface LocalInboxDoc {
   repliedAt?: string;
   themeId: string;
   isRead: boolean;
+  burnAfterReading?: boolean;
+  senderHint?: string;
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -106,11 +119,25 @@ export function reloadLocalStoreFromDiskIfNeeded(force = false) {
     if (force || stat.mtimeMs > lastLoadedMtimeMs || localStore.users.length === 0) {
       const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
       localStore.users = raw.users || [];
-      localStore.posts = (raw.posts || []).map((p: any) => ({
-        ...p,
-        reactions: p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 },
-        reactedBy: p.reactedBy || { fire: [], skull: [], eyes: [], heart: [] },
-      }));
+      localStore.posts = (raw.posts || []).map((p: any) => {
+        const analyzed = classifyPostTopics(p.content || '', p.tag);
+        return {
+          ...p,
+          tag: analyzed.primaryTag,
+          tagLower: analyzed.primaryTag.toLowerCase(),
+          categories:
+            Array.isArray(p.categories) && p.categories.length > 0
+              ? p.categories
+              : analyzed.matchedCategories,
+          keywords:
+            Array.isArray(p.keywords) && p.keywords.length > 0
+              ? p.keywords
+              : analyzed.keywords,
+          reactions: p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 },
+          reactedBy: p.reactedBy || { fire: [], skull: [], eyes: [], heart: [] },
+          comments: Array.isArray(p.comments) ? p.comments : [],
+        };
+      });
       localStore.inbox = raw.inbox || [];
       lastLoadedMtimeMs = stat.mtimeMs;
     }
@@ -256,9 +283,11 @@ export async function seedInitialDataIfEmpty() {
       authorDeviceId: 'demo-device-goldenwizard',
       authorHandle: 'GoldenWizard',
       content:
-        'Told my boss my Wi-Fi crashed during the 4PM standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫',
-      tag: '#WorkConfessions',
-      tagLower: '#workconfessions',
+        'Told my boss at the office my Wi-Fi crashed during the 4PM work standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫',
+      tag: '#Work',
+      tagLower: '#work',
+      categories: ['#Work', '#NightOut'],
+      keywords: ['boss', 'office', 'work', 'standup', 'rooftop', 'tacos', 'margaritas'],
       background: CURATED_GRADIENTS[0], // Neon Riot
       location: {
         type: 'Point' as const,
@@ -267,6 +296,15 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 14, skull: 8, eyes: 5, heart: 3 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      comments: [
+        {
+          _id: createId(),
+          authorHandle: 'NeonPanther',
+          text: 'Honestly the 4PM Friday standup deserves to be skipped every week 😂🔥',
+          isOp: false,
+          createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+        },
+      ],
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -278,9 +316,11 @@ export async function seedInitialDataIfEmpty() {
       authorDeviceId: 'demo-device-neonpanther',
       authorHandle: 'NeonPanther',
       content:
-        'Whoever was wearing the vintage neon green puffer at the 2AM warehouse set last night... we locked eyes 3 times. Drop a sign 👀⚡',
+        'Whoever was wearing the vintage neon green puffer at the 2AM warehouse rave party last night... we locked eyes 3 times. Drop a sign 👀⚡',
       tag: '#NightOut',
       tagLower: '#nightout',
+      categories: ['#NightOut', '#SexAndDating'],
+      keywords: ['warehouse', 'rave', 'party', '2am', 'night'],
       background: CURATED_UNSPLASH_IMAGES[2], // Warehouse Rave Lasers
       location: {
         type: 'Point' as const,
@@ -289,6 +329,7 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 22, skull: 2, eyes: 19, heart: 11 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      comments: [],
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -300,9 +341,11 @@ export async function seedInitialDataIfEmpty() {
       authorDeviceId: 'demo-device-acidrebel',
       authorHandle: 'AcidRebel',
       content:
-        'Unpopular opinion: 3AM diner fries with the squad hit 100x harder than any $200 reservation spot in the city.',
-      tag: '#UnpopularOpinion',
-      tagLower: '#unpopularopinion',
+        'My gym crush finally asked to spot me on bench press today and I forgot how to count past 4 reps 💀🏋️‍♂️',
+      tag: '#Gym',
+      tagLower: '#gym',
+      categories: ['#Gym', '#SexAndDating'],
+      keywords: ['gym', 'crush', 'bench', 'workout'],
       background: CURATED_GRADIENTS[1], // Acid Lime Flyer
       location: {
         type: 'Point' as const,
@@ -311,6 +354,7 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 31, skull: 6, eyes: 4, heart: 18 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      comments: [],
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -322,9 +366,11 @@ export async function seedInitialDataIfEmpty() {
       authorDeviceId: 'demo-device-cyberviper',
       authorHandle: 'CyberViper',
       content:
-        'Our entire group project got an A+ and none of us know who actually wrote the final 6 slides on the Google Doc 💀',
-      tag: '#CampusTea',
-      tagLower: '#campustea',
+        'Put my semester campus allowance into a Solana crypto memecoin at 3AM and woke up up 400%. Paying off the whole hostel dorm tuition 🚀💎',
+      tag: '#Crypto',
+      tagLower: '#crypto',
+      categories: ['#Crypto', '#Campus'],
+      keywords: ['crypto', 'solana', 'memecoin', 'campus', 'semester', 'hostel', 'dorm'],
       background: CURATED_UNSPLASH_IMAGES[0], // Neon Streetwear Alley
       location: {
         type: 'Point' as const,
@@ -333,6 +379,7 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 9, skull: 27, eyes: 7, heart: 4 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      comments: [],
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,
@@ -344,9 +391,11 @@ export async function seedInitialDataIfEmpty() {
       authorDeviceId: 'demo-device-goldenwizard',
       authorHandle: 'GoldenWizard',
       content:
-        'I still have a playlist secretly named after someone I talked to for literally 2 weeks back in October.',
-      tag: '#CrushAlert',
-      tagLower: '#crushalert',
+        'Sneaky link confession: hooking up with someone from the office HR department is all fun and games until you both get invited to the same 9AM meeting 👀🔥',
+      tag: '#SexAndDating',
+      tagLower: '#sexanddating',
+      categories: ['#SexAndDating', '#Work'],
+      keywords: ['sneaky', 'sex', 'dating', 'office', 'hr', 'meeting', 'work'],
       background: CURATED_GRADIENTS[3], // Midnight Rave
       location: {
         type: 'Point' as const,
@@ -355,6 +404,7 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 7, skull: 3, eyes: 15, heart: 24 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      comments: [],
       flagsCount: 0,
       flaggedBy: [],
       isHidden: false,

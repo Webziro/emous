@@ -166,14 +166,48 @@
     const STORAGE_DEMO_MODE_KEY = 'emous_demo_mode_v1';
 
     const POPULAR_TAGS = [
-      '#WorkConfessions',
-      '#CampusTea',
-      '#NightOut',
-      '#CrushAlert',
-      '#UnpopularOpinion',
-      '#LateNightThoughts',
-      '#Streetalk'
+      '#Work',
+      '#SexAndDating',
+      '#Crypto',
+      '#Gym',
+      '#Politics',
+      '#Religion',
+      '#Campus',
+      '#NightOut'
     ];
+
+    const TOPIC_DICTIONARIES = {
+      '#Work': ['work', 'office', 'boss', 'coworker', 'hr', 'salary', 'job', 'meeting', 'standup', 'client', 'manager', '9-5'],
+      '#SexAndDating': ['sex', 'hookup', 'crush', 'dating', 'ex', 'boyfriend', 'girlfriend', 'situationship', 'kiss', 'bed', 'tinder', 'sneaky', 'cheating'],
+      '#Crypto': ['crypto', 'bitcoin', 'btc', 'eth', 'solana', 'memecoin', 'token', 'wallet', 'web3', 'airdrop', 'bull', 'bear'],
+      '#Gym': ['gym', 'workout', 'protein', 'creatine', 'cardio', 'bench', 'squat', 'fitness', 'gains', 'muscle'],
+      '#Politics': ['politics', 'president', 'election', 'vote', 'government', 'senate', 'minister', 'policy', 'tax'],
+      '#Religion': ['religion', 'church', 'mosque', 'pray', 'prayer', 'god', 'faith', 'pastor', 'imam', 'bible', 'quran', 'sin'],
+      '#Campus': ['campus', 'college', 'uni', 'lecturer', 'professor', 'exam', 'hostel', 'dorm', 'semester', 'gpa', 'student'],
+      '#NightOut': ['nightout', 'club', 'party', 'rave', 'warehouse', 'drinks', 'drunk', 'bar', 'rooftop', 'dj', 'tequila', 'margaritas', 'tacos', '2am', '3am']
+    };
+
+    function detectAutoTag(text, explicitMode) {
+      if (explicitMode && explicitMode !== 'AUTO') return explicitMode;
+      const hashMatch = /#([a-zA-Z0-9_]{2,28})/.exec(text || '');
+      if (hashMatch) {
+        return '#' + hashMatch[1].charAt(0).toUpperCase() + hashMatch[1].slice(1);
+      }
+      const lower = (text || '').toLowerCase();
+      let bestTag = '#Confessions';
+      let bestScore = 0;
+      for (const [cat, words] of Object.entries(TOPIC_DICTIONARIES)) {
+        let score = 0;
+        for (const w of words) {
+          if (new RegExp('\\b' + w + '\\b', 'i').test(lower)) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestTag = cat;
+        }
+      }
+      return bestTag;
+    }
 
     const REACTION_LIST = [
       { type: 'fire', emoji: '🔥', label: 'Fire' },
@@ -232,9 +266,15 @@
         ? true
         : localStorage.getItem(STORAGE_DEMO_MODE_KEY) === 'true',
       soundAlertsEnabled: true,
+      isNotifOpen: false,
       lastKnownInboxCount: null,
       feedMode: 'global',
       selectedTag: 'All',
+      selectedPhrase: '',
+      dynamicTags: [...POPULAR_TAGS],
+      trendingPeriod: 'all',
+      trendingTags: [],
+      trendingPhrases: [],
       coords: { lat: 40.7128, lng: -74.006 },
       gpsStatus: '5-mile radius active',
       posts: [],
@@ -243,7 +283,7 @@
       toast: null,
       isComposerOpen: false,
       draftContent: '',
-      draftTag: '#WorkConfessions',
+      draftTag: 'AUTO',
       draftBg: {
         id: 'grad-neon-riot',
         type: 'gradient',
@@ -368,16 +408,38 @@
         }
       } catch (e) {}
 
-      await Promise.all([loadFeed(), loadInbox(false)]);
+      await Promise.all([loadFeed(), loadInbox(false), loadTrending()]);
       render();
 
-      // Phase 4: Real-Time Inbox Polling every 6 seconds for instant secret note alerts
+      // Phase 5: Real-Time Auto-Refresh for BOTH Inbox (6s) and Visual Feed + Trending (10s)
       setInterval(() => {
-        // Don't interrupt user while typing in a modal
         if (!state.isComposerOpen && !state.activeStoryMsg && state.route === 'main') {
           loadInbox(true);
         }
       }, 6000);
+      setInterval(() => {
+        if (!state.isComposerOpen && !state.activeStoryMsg && state.route === 'main') {
+          loadFeed();
+          loadTrending();
+        }
+      }, 10000);
+    }
+
+    async function loadTrending() {
+      try {
+        const res = await fetch(`${API_BASE}/posts/trending?period=${encodeURIComponent(state.trendingPeriod)}`, {
+          cache: 'no-store'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          state.trendingTags = data.trendingTags || [];
+          state.trendingPhrases = data.trendingPhrases || [];
+          if (Array.isArray(data.dynamicTags) && data.dynamicTags.length > 0) {
+            state.dynamicTags = data.dynamicTags;
+          }
+          render();
+        }
+      } catch (e) {}
     }
 
     function getLocalReactionsCache() {
@@ -480,6 +542,9 @@
       if (state.selectedTag && state.selectedTag !== 'All') {
         params.set('tag', state.selectedTag);
       }
+      if (state.selectedPhrase) {
+        params.set('phrase', state.selectedPhrase);
+      }
       if (state.feedMode === 'near') {
         params.set('lat', String(state.coords.lat));
         params.set('lng', String(state.coords.lng));
@@ -491,14 +556,23 @@
           cache: 'no-store'
         });
         const data = await res.json();
+        if (Array.isArray(data.popularTags) && data.popularTags.length > 0) {
+          state.dynamicTags = data.popularTags;
+        }
+        if (Array.isArray(data.trendingTags)) {
+          state.trendingTags = data.trendingTags;
+        }
+        if (Array.isArray(data.trendingPhrases)) {
+          state.trendingPhrases = data.trendingPhrases;
+        }
         const serverPosts = data.posts || [];
         state.posts =
-          state.selectedTag === 'All' && state.feedMode === 'global'
+          state.selectedTag === 'All' && !state.selectedPhrase && state.feedMode === 'global'
             ? mergePostsWithLocalCache(serverPosts)
             : serverPosts.map((p) => {
                 const rxEntry = getLocalReactionsCache()[p._id];
                 return rxEntry
-                  ? { ...p, reactions: rxEntry.reactions, myReactions: rxEntry.myReactions }
+                  ? { ...p, reactions: rxEntry.reactions, myReactions: (rxEntry.myReactions || []).slice(0, 1) }
                   : p;
               });
       } catch (e) {
@@ -618,26 +692,40 @@
 
     window.handleSelectTag = (tag) => {
       state.selectedTag = tag;
+      state.selectedPhrase = '';
+      state.activeScreen = 'feed';
       loadFeed();
     };
 
-    // Phase 4: Toggle Emoji Reaction (🔥, 💀, 👀, ❤️) on a Visual Feed Card (Optimistic + Persistent)
+    window.handleSelectPhrase = (phrase) => {
+      state.selectedTag = 'All';
+      state.selectedPhrase = phrase;
+      state.activeScreen = 'feed';
+      loadFeed();
+    };
+
+    // Phase 5: EXCLUSIVE SINGLE REACTION PER USER PER POST (1 User = Max 1 Reaction)
     window.handleReactPost = async (postId, type) => {
-      // 1. Immediate optimistic update + localStorage persistence
+      // 1. Immediate optimistic update enforcing max 1 reaction per post
       state.posts = state.posts.map((p) => {
         if (p._id !== postId) return p;
         const rx = { ...(p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 }) };
-        const myRx = Array.isArray(p.myReactions) ? [...p.myReactions] : [];
-        const idx = myRx.indexOf(type);
-        if (idx >= 0) {
-          myRx.splice(idx, 1);
-          rx[type] = Math.max(0, (rx[type] || 1) - 1);
-        } else {
-          myRx.push(type);
-          rx[type] = (rx[type] || 0) + 1;
+        const currentMy = Array.isArray(p.myReactions) ? [...p.myReactions] : [];
+        const alreadyHadThis = currentMy.includes(type);
+
+        // Decrement any previously active reaction on this post first
+        for (const prevType of currentMy) {
+          rx[prevType] = Math.max(0, (rx[prevType] || 1) - 1);
         }
-        saveLocalReactionState(postId, rx, myRx);
-        return { ...p, reactions: rx, myReactions: myRx };
+
+        let nextMy = [];
+        if (!alreadyHadThis) {
+          rx[type] = (rx[type] || 0) + 1;
+          nextMy = [type];
+        }
+
+        saveLocalReactionState(postId, rx, nextMy);
+        return { ...p, reactions: rx, myReactions: nextMy };
       });
       try {
         localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
@@ -653,10 +741,11 @@
         });
         const data = await res.json();
         if (res.ok && data.reactions) {
-          saveLocalReactionState(postId, data.reactions, data.myReactions);
+          const singleMy = (data.myReactions || []).slice(0, 1);
+          saveLocalReactionState(postId, data.reactions, singleMy);
           state.posts = state.posts.map((p) =>
             p._id === postId
-              ? { ...p, reactions: data.reactions, myReactions: data.myReactions }
+              ? { ...p, reactions: data.reactions, myReactions: singleMy }
               : p
           );
           localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
@@ -696,12 +785,13 @@
     window.handlePublishPost = async (e) => {
       e.preventDefault();
       if (!state.draftContent.trim()) return;
+      const chosenTag = detectAutoTag(state.draftContent, state.draftTag);
       const res = await fetch(`${API_BASE}/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
         body: JSON.stringify({
           content: state.draftContent.trim(),
-          tag: state.draftTag,
+          tag: chosenTag,
           background: state.draftBg,
           authorHandle: getCurrentHandle(),
           lat: state.coords.lat,
@@ -1092,23 +1182,32 @@
                 <textarea
                   rows="3"
                   maxlength="300"
-                  oninput="state.draftContent = this.value; document.getElementById('draft-char-count').textContent = this.value.length + '/300';"
-                  placeholder="Drop an anonymous confession, unpopular opinion, or local sighting..."
+                  oninput="state.draftContent = this.value; document.getElementById('draft-char-count').textContent = this.value.length + '/300'; document.getElementById('draft-auto-tag-badge').textContent = '✨ ' + detectAutoTag(this.value, state.draftTag);"
+                  placeholder="Drop an anonymous confession (mention work, office, sex, crypto, gym, politics, religion or any #hashtag — we auto-categorize it!)"
                   style="color: ${state.draftBg.type === 'image' ? '#FFFFFF' : state.draftBg.textColor}"
                   class="w-full bg-transparent placeholder:text-current/70 font-sans font-extrabold ${compact ? 'text-sm' : 'text-base'} focus:outline-none resize-none my-2 leading-snug"
                 >${escapeHtml(state.draftContent)}</textarea>
 
                 <div class="flex items-center justify-between text-[10px] font-extrabold">
-                  <span style="background-color: ${state.draftBg.badgeBg}; color: ${state.draftBg.badgeText}" class="px-2 py-0.5 rounded-md border-2 border-black truncate max-w-[70%]">
-                    ${escapeHtml(state.draftTag)}
+                  <span id="draft-auto-tag-badge" style="background-color: ${state.draftBg.badgeBg}; color: ${state.draftBg.badgeText}" class="px-2 py-0.5 rounded-md border-2 border-black truncate max-w-[70%]">
+                    ✨ ${escapeHtml(detectAutoTag(state.draftContent, state.draftTag))}
                   </span>
                   <span id="draft-char-count" class="bg-black/75 text-white px-2 py-0.5 rounded-full">${state.draftContent.length}/300</span>
                 </div>
               </div>
 
               <div>
-                <label class="block text-[10px] font-extrabold uppercase text-neutral-400 mb-1">Pick a Hashtag Badge:</label>
+                <label class="block text-[10px] font-extrabold uppercase text-neutral-400 mb-1">Category Mode (Auto-Detects from words or pick one):</label>
                 <div class="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onclick="state.draftTag = 'AUTO'; render();"
+                    class="text-[10px] font-display font-extrabold px-2 py-1 rounded-lg border-2 border-black ${
+                      state.draftTag === 'AUTO' ? 'bg-emous-lime text-black' : 'bg-black text-neutral-300'
+                    }"
+                  >
+                    ⚡ Auto-Detect
+                  </button>
                   ${POPULAR_TAGS.map(
                     (t) => `
                     <button
@@ -1265,11 +1364,11 @@
     }
 
     function renderScrollingTagBar() {
-      const baseTags = ['All', ...POPULAR_TAGS];
+      const baseTags = ['All', ...(state.dynamicTags || POPULAR_TAGS)];
       const marqueeItems = [...baseTags, ...baseTags];
       const compact = isCompactMobile();
       return `
-        <div class="tag-marquee-viewport no-scrollbar" title="Hover to pause scrolling tags">
+        <div class="tag-marquee-viewport no-scrollbar" title="Hover to pause dynamic scrolling tags">
           <div class="tag-marquee-track">
             ${marqueeItems
               .map(
@@ -1277,7 +1376,7 @@
               <button
                 onclick="handleSelectTag('${tag}')"
                 class="shrink-0 ${compact ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-xs'} rounded-full font-display font-extrabold uppercase flyer-btn ${
-                  state.selectedTag === tag
+                  state.selectedTag === tag && !state.selectedPhrase
                     ? 'bg-emous-yellow text-black'
                     : 'bg-emous-surface text-white hover:bg-neutral-800'
                 }"
@@ -1292,6 +1391,108 @@
       `;
     }
 
+    function renderTrendingScreen() {
+      const compact = isCompactMobile();
+      const tags = state.trendingTags || [];
+      const phrases = state.trendingPhrases || [];
+
+      return `
+        <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-5">
+          <div class="bg-emous-surface rounded-2xl p-4 flyer-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <span class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] uppercase px-2 py-0.5 rounded border border-black mb-1">
+                📈 LIVE NLP TRENDING RADAR
+              </span>
+              <h1 class="font-display font-extrabold ${compact ? 'text-lg' : 'text-2xl'} text-white">
+                What Everyone Is Confessing About
+              </h1>
+              <p class="text-[11px] text-neutral-300 font-bold">
+                Categorized dynamically by hashtags & frequent phrases ("work", "office", "crypto", "sex", "gym", "politics", "religion"...)
+              </p>
+            </div>
+
+            <div class="bg-black p-1 rounded-xl border-2 border-white/15 inline-flex gap-1 shrink-0">
+              ${[
+                { id: '24h', label: '🔥 24h' },
+                { id: '7d', label: '⚡ 7d' },
+                { id: 'all', label: '🌐 All' }
+              ]
+                .map(
+                  (p) => `
+                <button
+                  onclick="state.trendingPeriod = '${p.id}'; loadTrending();"
+                  class="px-2.5 py-1.5 rounded-lg font-display font-extrabold text-[10px] uppercase ${
+                    state.trendingPeriod === p.id ? 'bg-emous-lime text-black' : 'text-neutral-400 hover:text-white'
+                  }"
+                >
+                  ${p.label}
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+
+          <!-- Trending Categories Leaderboard -->
+          <div class="space-y-2.5">
+            <h2 class="font-display font-extrabold text-sm sm:text-lg text-white">
+              🏷️ Trending Topic Categories (Tap to view confessions)
+            </h2>
+            <div class="grid ${compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'} gap-3">
+              ${tags
+                .map(
+                  (item, idx) => `
+                <button
+                  onclick="handleSelectTag('${escapeHtml(item.tag)}')"
+                  class="bg-emous-surface hover:bg-neutral-800 text-left rounded-2xl p-3.5 flyer-card flex flex-col justify-between gap-1.5"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="bg-emous-yellow text-black font-display font-extrabold text-[9px] px-2 py-0.5 rounded border border-black">
+                      #${idx + 1} HOT
+                    </span>
+                    <span class="text-[11px] font-extrabold text-emous-lime">🔥 ${item.reactionsCount}</span>
+                  </div>
+                  <p class="font-display font-extrabold text-sm sm:text-base text-white truncate">${escapeHtml(item.tag)}</p>
+                  <p class="text-[10px] font-bold text-neutral-400">${item.count} confessions</p>
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+
+          <!-- Trending Phrases & Keywords Cloud -->
+          <div class="bg-emous-surface rounded-2xl p-4 flyer-card space-y-3">
+            <div>
+              <span class="bg-emous-pink text-white font-display font-extrabold text-[9px] uppercase px-2.5 py-0.5 rounded-full border border-black">
+                💬 FREQUENTLY USED PHRASES & KEYWORDS
+              </span>
+              <h2 class="font-display font-extrabold text-base sm:text-xl mt-1">
+                Hot Words Detected Inside Confessions
+              </h2>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              ${phrases
+                .map(
+                  (item, idx) => `
+                <button
+                  onclick="handleSelectPhrase('${escapeHtml(item.phrase)}')"
+                  class="px-3 py-1.5 rounded-xl flyer-btn inline-flex items-center gap-1.5 ${
+                    idx < 3 ? 'bg-emous-lime text-black' : 'bg-black text-white hover:bg-emous-yellow hover:text-black'
+                  }"
+                >
+                  <span class="font-display font-extrabold text-xs uppercase">“${escapeHtml(item.phrase)}”</span>
+                  <span class="bg-emous-pink text-white text-[9px] font-extrabold px-1.5 rounded-full border border-black">${item.count}</span>
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+        </main>
+      `;
+    }
     function renderMainApp() {
       const currentHandle = getCurrentHandle();
       const activeStoryTheme = STORY_THEMES.find((t) => t.id === state.storyThemeId) || STORY_THEMES[0];
@@ -1302,31 +1503,49 @@
 
       return `
         <div>
-          <!-- Top Streetwear Brand Header -->
+          <!-- Top Streetwear Brand Header with Active Notification Bell -->
           <header class="sticky top-0 z-30 bg-emous-bg/95 backdrop-blur-md border-b-3 border-black">
             <div class="max-w-5xl mx-auto px-3 py-2.5 ${
               compact ? 'space-y-2' : 'flex items-center justify-between gap-3'
             }">
-              <!-- Logo + Auto-Handle Pill -->
+              <!-- Logo + Auto-Handle Pill + Active Notification Bell -->
               <div class="flex items-center justify-between gap-2">
-                <button onclick="navigateToMain('feed')" class="bg-emous-lime text-black font-display font-extrabold ${
-                  compact ? 'text-base px-2.5 py-0.5' : 'text-2xl px-3.5 py-1'
-                } rounded-xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0">
-                  <span>emous</span>
-                  <span class="text-[8px] bg-black text-emous-yellow px-1.5 py-0.5 rounded-full uppercase">MVP</span>
-                </button>
-
-                <div class="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-0.5 min-w-0">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emous-lime animate-pulse shrink-0"></span>
-                  <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[110px]">@${escapeHtml(currentHandle)}</span>
-                  <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[10px] bg-black text-white px-1.5 py-0.5 rounded-full hover:bg-emous-pink shrink-0">
-                    🎲
+                <div class="flex items-center gap-2">
+                  <button onclick="state.selectedTag='All'; state.selectedPhrase=''; navigateToMain('feed');" class="bg-emous-lime text-black font-display font-extrabold ${
+                    compact ? 'text-base px-2.5 py-0.5' : 'text-2xl px-3.5 py-1'
+                  } rounded-xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0">
+                    <span>emous</span>
+                    <span class="text-[8px] bg-black text-emous-yellow px-1.5 py-0.5 rounded-full uppercase">LIVE</span>
                   </button>
+
+                  <div class="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-0.5 min-w-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emous-lime animate-pulse shrink-0"></span>
+                    <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[100px]">@${escapeHtml(currentHandle)}</span>
+                    <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[10px] bg-black text-white px-1.5 py-0.5 rounded-full hover:bg-emous-pink shrink-0">
+                      🎲
+                    </button>
+                  </div>
                 </div>
+
+                <!-- Active Notification Bell Icon -->
+                <button
+                  onclick="state.isNotifOpen = !state.isNotifOpen; render();"
+                  class="px-2.5 py-1 rounded-xl flyer-btn relative inline-flex items-center gap-1 ${
+                    state.isNotifOpen ? 'bg-emous-yellow text-black' : 'bg-emous-surface text-white'
+                  }"
+                  title="Live Notifications & Auto-Refresh"
+                >
+                  <span>🔔</span>
+                  ${
+                    state.unreadCount > 0
+                      ? `<span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1.5 rounded-full animate-bounce">${state.unreadCount}</span>`
+                      : ''
+                  }
+                </button>
               </div>
 
-              <!-- 3-Column Navigation Tabs: Feed | Inbox Link | + Drop Card -->
-              <div class="grid grid-cols-3 gap-1.5">
+              <!-- 4-Column Navigation Tabs: Feed | Trending | Inbox | + Card -->
+              <div class="grid grid-cols-4 gap-1.5">
                 <button
                   onclick="navigateToMain('feed')"
                   class="px-2 py-1.5 rounded-xl font-display font-extrabold text-[10px] uppercase flyer-btn text-center truncate ${
@@ -1337,15 +1556,22 @@
                 </button>
 
                 <button
+                  onclick="state.activeScreen = 'trending'; loadTrending(); render();"
+                  class="px-2 py-1.5 rounded-xl font-display font-extrabold text-[10px] uppercase flyer-btn text-center truncate ${
+                    state.activeScreen === 'trending' ? 'bg-emous-yellow text-black' : 'bg-emous-surface text-white'
+                  }"
+                >
+                  📈 Trend
+                </button>
+
+                <button
                   onclick="navigateToMain('inbox')"
                   class="px-2 py-1.5 rounded-xl font-display font-extrabold text-[10px] uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
                     state.activeScreen === 'inbox' ? 'bg-emous-lime text-black' : 'bg-emous-surface text-white'
                   }"
                 >
                   <span class="truncate">🔗 Inbox</span>
-                  <span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0 ${
-                    state.unreadCount > 0 ? 'animate-bounce' : ''
-                  }">
+                  <span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0">
                     ${state.inboxMessages.length}
                   </span>
                 </button>
@@ -1358,10 +1584,58 @@
                 </button>
               </div>
             </div>
+
+            ${
+              state.isNotifOpen
+                ? `
+              <div class="max-w-md ml-auto mr-3 mb-2.5 bg-emous-surface rounded-2xl p-3.5 flyer-card space-y-2.5 border-2 border-black">
+                <div class="flex items-center justify-between">
+                  <span class="bg-emous-lime text-black font-display font-extrabold text-[9px] px-2 py-0.5 rounded-full border border-black uppercase">
+                    🔔 LIVE NOTIFICATIONS • AUTO-REFRESH ON
+                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="state.soundAlertsEnabled = !state.soundAlertsEnabled; render();" class="bg-black text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full">
+                      ${state.soundAlertsEnabled ? '🔊 Sound ON' : '🔇 Muted'}
+                    </button>
+                    <button onclick="state.isNotifOpen = false; render();" class="bg-black text-white px-2 py-0.5 rounded-lg text-xs font-bold">✕</button>
+                  </div>
+                </div>
+                <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                  ${state.inboxMessages
+                    .slice(0, 5)
+                    .map(
+                      (m) => `
+                    <button onclick="state.isNotifOpen=false; navigateToMain('inbox');" class="w-full text-left bg-black/80 hover:bg-black p-2 rounded-xl border border-white/15 flex items-center justify-between gap-2">
+                      <div class="min-w-0">
+                        <p class="text-[10px] font-extrabold text-emous-yellow truncate">
+                          ${m.isRead ? '✉️ Secret Note' : '🔥 New Unread Secret'} for @${escapeHtml(currentHandle)}
+                        </p>
+                        <p class="text-[10px] text-neutral-300 truncate">“${escapeHtml(m.question)}”</p>
+                      </div>
+                      <span class="text-[9px] text-neutral-400 font-bold shrink-0">${formatRelativeTime(m.createdAt)}</span>
+                    </button>
+                  `
+                    )
+                    .join('')}
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                  <button onclick="loadFeed(); loadInbox(false); loadTrending(); showToast('⚡ Synced live feed & inbox!');" class="text-[10px] font-extrabold text-emous-lime underline">
+                    🔄 Refresh Now
+                  </button>
+                  <button onclick="handleSimulateIncomingSecret()" class="bg-emous-pink text-white font-display font-extrabold text-[9px] px-2.5 py-1 rounded-lg border border-black uppercase">
+                    🔔 Simulate Live Alert
+                  </button>
+                </div>
+              </div>
+            `
+                : ''
+            }
           </header>
 
           ${
-            state.activeScreen === 'feed'
+            state.activeScreen === 'trending'
+              ? renderTrendingScreen()
+              : state.activeScreen === 'feed'
               ? `
             <!-- SCREEN 1: THE APP HOME FEED -->
             <main class="max-w-5xl mx-auto px-3 pt-3.5 space-y-3.5">

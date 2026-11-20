@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   Flame,
@@ -20,11 +20,19 @@ import {
   Download,
   X,
   ExternalLink,
+  Bell,
+  TrendingUp,
+  Volume2,
+  VolumeX,
+  Send,
+  Clock,
+  Eye,
 } from 'lucide-react';
 import {
   ALL_BACKGROUNDS,
   BRAND,
   CardBackground,
+  classifyPostTopics,
   CURATED_GRADIENTS,
   InboxMessageDTO,
   POPULAR_TAGS,
@@ -33,10 +41,14 @@ import {
   REACTION_TYPES,
   ReactionType,
   STORY_COLOR_PAIRS,
+  TrendingPhraseItem,
+  TrendingTagItem,
   UserIdentityDTO,
+  addPostComment,
   createPost,
   fetchInbox,
   fetchPosts,
+  fetchTrendingData,
   flagInboxMessage,
   flagPost,
   initZeroFrictionIdentity,
@@ -59,10 +71,42 @@ function formatRelativeTime(iso: string): string {
   return `${Math.floor(diffHr / 24)}d ago`;
 }
 
-/**
- * Generates a high-resolution 1080x1920 (9:16) PNG image for Instagram/Snapchat Stories
- * directly using HTML5 Canvas so users can download or share their Q&A card in 1 click.
- */
+function formatBurnCountdown(createdAtIso: string): string {
+  const createdMs = new Date(createdAtIso).getTime();
+  const expiresMs = createdMs + BRAND.inboxBurnSeconds * 1000;
+  const remainingMs = Math.max(0, expiresMs - Date.now());
+  const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor(
+    (remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+  );
+  return `${days}d ${hours}h left`;
+}
+
+function playNotificationChime(enabled = true) {
+  if (!enabled || typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const playNote = (freq: number, start: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.18, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur);
+    };
+    playNote(587.33, now, 0.16);
+    playNote(880.0, now + 0.14, 0.28);
+  } catch {}
+}
+
 function wrapCanvasText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -105,49 +149,32 @@ function downloadStoryPng(params: {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // 1. Background
   ctx.fillStyle = theme.canvasBg;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // Decorative neon glow circles
-  ctx.fillStyle = 'rgba(255, 30, 142, 0.16)';
-  ctx.beginPath();
-  ctx.arc(200, 300, 320, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(204, 255, 0, 0.14)';
-  ctx.beginPath();
-  ctx.arc(880, 1500, 360, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Top Header Pill
   ctx.fillStyle = '#FFE600';
-  ctx.fillRect(310, 120, 460, 74);
+  ctx.fillRect(290, 120, 500, 76);
   ctx.strokeStyle = '#000000';
   ctx.lineWidth = 8;
-  ctx.strokeRect(310, 120, 460, 74);
+  ctx.strokeRect(290, 120, 500, 76);
   ctx.fillStyle = '#0D0D11';
   ctx.font = '900 32px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`ASK @${params.handle.toUpperCase()}`, 540, 168);
+  ctx.fillText(`ASK @${params.handle.toUpperCase()}`, 540, 170);
 
-  // 2. Top Card: Anonymous Question
   const cardX = 90;
   const topCardY = 270;
   const cardW = 900;
   const topCardH = 620;
 
-  // Hard offset shadow
   ctx.fillStyle = '#000000';
   ctx.fillRect(cardX + 18, topCardY + 18, cardW, topCardH);
-
   ctx.fillStyle = theme.topCardBg;
   ctx.fillRect(cardX, topCardY, cardW, topCardH);
   ctx.strokeStyle = '#000000';
   ctx.lineWidth = 10;
   ctx.strokeRect(cardX, topCardY, cardW, topCardH);
 
-  // Question Label
   ctx.fillStyle = '#000000';
   ctx.fillRect(cardX + 45, topCardY + 45, 360, 60);
   ctx.fillStyle = '#CCFF00';
@@ -155,7 +182,6 @@ function downloadStoryPng(params: {
   ctx.textAlign = 'left';
   ctx.fillText('🤫 ANONYMOUS CONFESSION', cardX + 68, topCardY + 84);
 
-  // Question Text
   ctx.fillStyle = theme.topCardText;
   ctx.font = '800 48px sans-serif';
   wrapCanvasText(
@@ -167,27 +193,27 @@ function downloadStoryPng(params: {
     66
   );
 
-  // 3. Bottom Card: User's Reply
   const bottomCardY = 960;
   const bottomCardH = 620;
 
   ctx.fillStyle = '#000000';
   ctx.fillRect(cardX + 18, bottomCardY + 18, cardW, bottomCardH);
-
   ctx.fillStyle = theme.bottomCardBg;
   ctx.fillRect(cardX, bottomCardY, cardW, bottomCardH);
   ctx.strokeStyle = '#000000';
   ctx.lineWidth = 10;
   ctx.strokeRect(cardX, bottomCardY, cardW, bottomCardH);
 
-  // Reply Label
   ctx.fillStyle = '#000000';
   ctx.fillRect(cardX + 45, bottomCardY + 45, 340, 60);
   ctx.fillStyle = '#FFE600';
   ctx.font = '800 26px sans-serif';
-  ctx.fillText(`⚡ @${params.handle.toUpperCase()} REPLIED`, cardX + 68, bottomCardY + 84);
+  ctx.fillText(
+    `⚡ @${params.handle.toUpperCase()} REPLIED`,
+    cardX + 68,
+    bottomCardY + 84
+  );
 
-  // Reply Text
   ctx.fillStyle = theme.bottomCardText;
   ctx.font = '800 50px sans-serif';
   wrapCanvasText(
@@ -199,7 +225,6 @@ function downloadStoryPng(params: {
     68
   );
 
-  // 4. Watermark Footer at Bottom
   ctx.fillStyle = '#FF1E8E';
   ctx.fillRect(220, 1690, 640, 110);
   ctx.strokeStyle = '#000000';
@@ -209,7 +234,7 @@ function downloadStoryPng(params: {
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 36px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`emous.app/ask/${params.handle}`, 540, 1758);
+  ctx.fillText(`${BRAND.domain}/ask/${params.handle}`, 540, 1758);
 
   const link = document.createElement('a');
   link.download = `emous-story-${params.handle.toLowerCase()}.png`;
@@ -217,38 +242,171 @@ function downloadStoryPng(params: {
   link.click();
 }
 
+function downloadFeedCardStoryPng(post: PostDTO) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.fillStyle = '#0D0D11';
+  ctx.fillRect(0, 0, 1080, 1920);
+
+  ctx.fillStyle = '#CCFF00';
+  ctx.fillRect(260, 130, 560, 82);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(260, 130, 560, 82);
+  ctx.fillStyle = '#0D0D11';
+  ctx.font = '900 34px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔥 EMOUS COMMUNITY FEED', 540, 184);
+
+  const cardX = 85;
+  const cardY = 290;
+  const cardW = 910;
+  const cardH = 1180;
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(cardX + 20, cardY + 20, cardW, cardH);
+
+  const colors = post.background?.colors || ['#FF1E8E', '#7928CA'];
+  const grad = ctx.createLinearGradient(
+    cardX,
+    cardY,
+    cardX + cardW,
+    cardY + cardH
+  );
+  grad.addColorStop(0, colors[0] || '#FF1E8E');
+  grad.addColorStop(1, colors[1] || '#7928CA');
+  ctx.fillStyle = grad;
+  ctx.fillRect(cardX, cardY, cardW, cardH);
+  ctx.lineWidth = 10;
+  ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(cardX + 55, cardY + 55, 420, 68);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '800 28px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`🎭 @${post.authorHandle}`, cardX + 80, cardY + 99);
+
+  ctx.fillStyle = post.background?.textColor || '#FFFFFF';
+  ctx.font = '900 52px sans-serif';
+  wrapCanvasText(
+    ctx,
+    `“${post.content}”`,
+    cardX + 60,
+    cardY + 240,
+    cardW - 120,
+    72
+  );
+
+  ctx.fillStyle = post.background?.badgeBg || '#CCFF00';
+  ctx.fillRect(cardX + 55, cardY + cardH - 135, 390, 74);
+  ctx.strokeRect(cardX + 55, cardY + cardH - 135, 390, 74);
+  ctx.fillStyle = post.background?.badgeText || '#0D0D11';
+  ctx.font = '900 28px sans-serif';
+  ctx.fillText(post.tag, cardX + 80, cardY + cardH - 88);
+
+  const rx = post.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 };
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(cardX + 475, cardY + cardH - 135, 380, 74);
+  ctx.fillStyle = '#FFE600';
+  ctx.font = '800 26px sans-serif';
+  ctx.fillText(
+    `🔥 ${rx.fire}  💀 ${rx.skull}  👀 ${rx.eyes}  ❤️ ${rx.heart}`,
+    cardX + 500,
+    cardY + cardH - 88
+  );
+
+  ctx.fillStyle = '#FF1E8E';
+  ctx.fillRect(200, 1620, 680, 112);
+  ctx.strokeRect(200, 1620, 680, 112);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '900 34px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${BRAND.domain}/ask/${post.authorHandle}`, 540, 1688);
+
+  const a = document.createElement('a');
+  a.download = `emous-card-${post.authorHandle.toLowerCase()}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+export interface ActivityNotification {
+  id: string;
+  type: 'inbox' | 'reaction' | 'comment' | 'system';
+  title: string;
+  subtitle: string;
+  targetScreen: 'feed' | 'inbox' | 'trending';
+  createdAt: string;
+  isRead: boolean;
+}
+
 export default function EmousHomeApp() {
-  // Active Top-Level Screen ('feed' | 'inbox')
-  const [activeScreen, setActiveScreen] = useState<'feed' | 'inbox'>('feed');
+  // Active Top-Level Screen ('feed' | 'trending' | 'inbox')
+  const [activeScreen, setActiveScreen] = useState<
+    'feed' | 'trending' | 'inbox'
+  >('feed');
 
   // Zero-Friction User Identity
   const [identity, setIdentity] = useState<UserIdentityDTO | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Screen 1: Feed State
+  // Screen 1: Feed State + Dynamic Categorization
   const [feedMode, setFeedMode] = useState<'global' | 'near'>('global');
   const [selectedTag, setSelectedTag] = useState<string>('All');
+  const [selectedPhrase, setSelectedPhrase] = useState<string>('');
+  const [dynamicTags, setDynamicTags] = useState<string[]>([...POPULAR_TAGS]);
   const [posts, setPosts] = useState<PostDTO[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({
     lat: 40.7128,
-    lng: -74.006, // Default Downtown seed coordinates with instant browser GPS override
+    lng: -74.006,
   });
   const [gpsStatus, setGpsStatus] = useState<string>('5-mile radius active');
   const [toast, setToast] = useState<string | null>(null);
 
-  // Post Composer + 🎲 Card Shuffler State
+  // Trending Radar Tab State
+  const [trendingPeriod, setTrendingPeriod] = useState<'24h' | '7d' | 'all'>(
+    'all'
+  );
+  const [trendingTags, setTrendingTags] = useState<TrendingTagItem[]>([]);
+  const [trendingPhrases, setTrendingPhrases] = useState<TrendingPhraseItem[]>(
+    []
+  );
+
+  // Active Notification Bell & Auto-Refresh State
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [notifications, setNotifications] = useState<ActivityNotification[]>(
+    []
+  );
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string>('Live');
+  const prevInboxCountRef = useRef<number | null>(null);
+
+  // Anonymous Whisper Comments Drawer State
+  const [activeCommentPost, setActiveCommentPost] = useState<PostDTO | null>(
+    null
+  );
+  const [commentText, setCommentText] = useState('');
+
+  // Post Composer + 🎲 Card Shuffler + Live Dynamic Tag Preview
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [draftContent, setDraftContent] = useState('');
-  const [draftTag, setDraftTag] = useState<string>(POPULAR_TAGS[0]);
+  const [draftTagMode, setDraftTagMode] = useState<string>('AUTO');
   const [draftBg, setDraftBg] = useState<CardBackground>(CURATED_GRADIENTS[0]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isShuffling, setIsShuffling] = useState(false);
 
-  // Screen 2 & 4: Inbox + 9:16 Story Reply Generator State
+  // Screen 2 & 4: Inbox + 9:16 Story Reply Generator + Hint Peek
   const [inboxMessages, setInboxMessages] = useState<InboxMessageDTO[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [demoGoldenWizardMode, setDemoGoldenWizardMode] = useState(false);
+  const [revealedHints, setRevealedHints] = useState<Record<string, boolean>>(
+    {}
+  );
   const [activeStoryMsg, setActiveStoryMsg] = useState<InboxMessageDTO | null>(
     null
   );
@@ -256,22 +414,36 @@ export default function EmousHomeApp() {
   const [storyThemeId, setStoryThemeId] = useState<string>('story-pink-lime');
   const [isSavingReply, setIsSavingReply] = useState(false);
 
-  const showToast = (msg: string) => {
+  const STORAGE_POSTS_CACHE = 'emous_posts_cache_v2';
+  const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v2';
+  const STORAGE_REACTIONS_CACHE = 'emous_reactions_cache_v2';
+
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3200);
+    setTimeout(() => setToast(null), 3400);
+  }, []);
+
+  const getLocalRxCache = (): Record<
+    string,
+    { reactions: any; myReactions: ReactionType[] }
+  > => {
+    if (typeof window === 'undefined') return {};
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_REACTIONS_CACHE) || '{}');
+    } catch {
+      return {};
+    }
   };
 
-  // Check URL query param `?tab=inbox`
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'inbox') {
-        setActiveScreen('inbox');
-      }
+      const tab = params.get('tab');
+      if (tab === 'inbox') setActiveScreen('inbox');
+      if (tab === 'trending') setActiveScreen('trending');
     }
   }, []);
 
-  // 1. Initialize Zero-Friction Identity on load
   useEffect(() => {
     initZeroFrictionIdentity().then((user) => {
       setIdentity(user);
@@ -282,101 +454,241 @@ export default function EmousHomeApp() {
     ? 'GoldenWizard'
     : identity?.handle || 'GoldenWizard';
 
-  const STORAGE_POSTS_CACHE = 'emous_posts_cache_v1';
-  const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v1';
-  const STORAGE_REACTIONS_CACHE = 'emous_reactions_cache_v1';
+  // Live NLP preview for the Post Composer
+  const liveComposerClassification = classifyPostTopics(
+    draftContent,
+    draftTagMode === 'AUTO' ? undefined : draftTagMode
+  );
 
-  const getLocalRxCache = (): Record<
-    string,
-    { reactions: any; myReactions: any }
-  > => {
-    if (typeof window === 'undefined') return {};
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_REACTIONS_CACHE) || '{}');
-    } catch {
-      return {};
-    }
-  };
+  // Load Feed Posts (Supports dynamic tag or trending phrase filtering + background silent refresh)
+  const loadFeed = useCallback(
+    async (silent = false) => {
+      if (!silent) setIsLoadingFeed(true);
+      try {
+        const data = await fetchPosts({
+          mode: feedMode,
+          tag: selectedTag === 'All' ? undefined : selectedTag,
+          phrase: selectedPhrase || undefined,
+          lat: coords.lat,
+          lng: coords.lng,
+        });
+        if (Array.isArray(data.popularTags) && data.popularTags.length > 0) {
+          setDynamicTags(Array.from(new Set(data.popularTags)));
+        }
+        if (Array.isArray(data.trendingTags)) {
+          setTrendingTags(data.trendingTags);
+        }
+        if (Array.isArray(data.trendingPhrases)) {
+          setTrendingPhrases(data.trendingPhrases);
+        }
 
-  // 2. Load Feed Posts (with localStorage reaction & post persistence)
-  const loadFeed = useCallback(async () => {
-    setIsLoadingFeed(true);
-    try {
-      const data = await fetchPosts({
-        mode: feedMode,
-        tag: selectedTag === 'All' ? undefined : selectedTag,
-        lat: coords.lat,
-        lng: coords.lng,
-      });
-      const rxCache = getLocalRxCache();
-      const merged = data.posts.map((post) => {
-        const entry = rxCache[post._id];
-        return entry
-          ? {
-              ...post,
-              reactions: entry.reactions || post.reactions,
-              myReactions: entry.myReactions || post.myReactions,
-            }
-          : post;
-      });
-      setPosts(merged);
-      if (typeof window !== 'undefined' && selectedTag === 'All') {
-        localStorage.setItem(
-          STORAGE_POSTS_CACHE,
-          JSON.stringify(merged.slice(0, 60))
-        );
-      }
-    } catch {
-      if (typeof window !== 'undefined') {
-        try {
-          const cached = JSON.parse(
-            localStorage.getItem(STORAGE_POSTS_CACHE) || '[]'
+        const rxCache = getLocalRxCache();
+        const merged = data.posts.map((post) => {
+          const entry = rxCache[post._id];
+          return entry
+            ? {
+                ...post,
+                reactions: entry.reactions || post.reactions,
+                // Strictly max 1 reaction per user per post
+                myReactions: Array.isArray(entry.myReactions)
+                  ? entry.myReactions.slice(0, 1)
+                  : post.myReactions?.slice(0, 1) || [],
+              }
+            : post;
+        });
+        setPosts(merged);
+        setLastUpdatedLabel('Synced just now');
+
+        if (
+          typeof window !== 'undefined' &&
+          selectedTag === 'All' &&
+          !selectedPhrase
+        ) {
+          localStorage.setItem(
+            STORAGE_POSTS_CACHE,
+            JSON.stringify(merged.slice(0, 60))
           );
-          if (cached.length > 0) setPosts(cached);
-        } catch {}
+        }
+      } catch {
+        if (typeof window !== 'undefined' && !silent) {
+          try {
+            const cached = JSON.parse(
+              localStorage.getItem(STORAGE_POSTS_CACHE) || '[]'
+            );
+            if (cached.length > 0) setPosts(cached);
+          } catch {}
+        }
+      } finally {
+        if (!silent) setIsLoadingFeed(false);
       }
-    } finally {
-      setIsLoadingFeed(false);
-    }
-  }, [feedMode, selectedTag, coords]);
+    },
+    [feedMode, selectedTag, selectedPhrase, coords]
+  );
 
   useEffect(() => {
-    loadFeed();
+    loadFeed(false);
   }, [loadFeed]);
 
-  // 3. Load Inbox Messages (with background polling & localStorage persistence)
-  const loadInbox = useCallback(async () => {
-    if (!currentHandle) return;
-    const inboxKey = `${STORAGE_INBOX_CACHE}_${currentHandle.toLowerCase()}`;
-    try {
-      const data = await fetchInbox(currentHandle);
-      setInboxMessages(data.messages);
-      setUnreadCount(data.unreadCount);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          inboxKey,
-          JSON.stringify(data.messages.slice(0, 80))
-        );
-      }
-    } catch {
-      if (typeof window !== 'undefined') {
-        try {
-          const cached = JSON.parse(localStorage.getItem(inboxKey) || '[]');
-          if (cached.length > 0) setInboxMessages(cached);
-        } catch {}
-      }
+  // Load Trending Radar Data
+  const loadTrending = useCallback(async () => {
+    const stats = await fetchTrendingData(trendingPeriod);
+    setTrendingTags(stats.trendingTags);
+    setTrendingPhrases(stats.trendingPhrases);
+    if (stats.dynamicTags?.length > 0) {
+      setDynamicTags(stats.dynamicTags);
     }
-  }, [currentHandle]);
+  }, [trendingPeriod]);
 
   useEffect(() => {
-    loadInbox();
-    const timer = setInterval(() => {
-      loadInbox();
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [loadInbox]);
+    loadTrending();
+  }, [loadTrending]);
 
-  // Toggle Near Me (requests browser GPS or uses seed downtown coords so demo works everywhere)
+  // Load Inbox Messages + Build Live Notifications
+  const loadInbox = useCallback(
+    async (isPoll = false) => {
+      if (!currentHandle) return;
+      const inboxKey = `${STORAGE_INBOX_CACHE}_${currentHandle.toLowerCase()}`;
+      try {
+        const data = await fetchInbox(currentHandle);
+        const nextCount = data.messages.length;
+
+        if (
+          isPoll &&
+          prevInboxCountRef.current !== null &&
+          nextCount > prevInboxCountRef.current
+        ) {
+          playNotificationChime(soundEnabled);
+          showToast(
+            `🔔 New secret confession just arrived for @${currentHandle}!`
+          );
+        }
+        prevInboxCountRef.current = nextCount;
+
+        setInboxMessages(data.messages);
+        setUnreadCount(data.unreadCount);
+
+        // Build Notification Bell Feed from Inbox notes & trending velocity
+        const inboxNotifs: ActivityNotification[] = data.messages
+          .slice(0, 6)
+          .map((m) => ({
+            id: `notif-inbox-${m._id}`,
+            type: 'inbox',
+            title: m.isRead
+              ? `✉️ Secret note for @${currentHandle}`
+              : `🔥 New Unread Secret for @${currentHandle}`,
+            subtitle: `“${m.question.slice(0, 75)}${
+              m.question.length > 75 ? '...' : ''
+            }”`,
+            targetScreen: 'inbox',
+            createdAt: m.createdAt,
+            isRead: m.isRead,
+          }));
+
+        setNotifications(inboxNotifs);
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(
+            inboxKey,
+            JSON.stringify(data.messages.slice(0, 80))
+          );
+        }
+      } catch {
+        if (typeof window !== 'undefined') {
+          try {
+            const cached = JSON.parse(localStorage.getItem(inboxKey) || '[]');
+            if (cached.length > 0) setInboxMessages(cached);
+          } catch {}
+        }
+      }
+    },
+    [currentHandle, soundEnabled, showToast]
+  );
+
+  // Automatic Background Refresh for BOTH Feed (10s) and Inbox (6s)
+  useEffect(() => {
+    loadInbox(false);
+    const inboxInterval = setInterval(() => {
+      loadInbox(true);
+    }, 6000);
+    const feedInterval = setInterval(() => {
+      if (!isComposerOpen && !activeStoryMsg && !activeCommentPost) {
+        loadFeed(true);
+        loadTrending();
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(inboxInterval);
+      clearInterval(feedInterval);
+    };
+  }, [loadInbox, loadFeed, loadTrending, isComposerOpen, activeStoryMsg, activeCommentPost]);
+
+  // EXCLUSIVE SINGLE REACTION HANDLER (1 User = Max 1 Reaction Per Post)
+  const handleSingleReaction = async (post: PostDTO, type: ReactionType) => {
+    // 1. Optimistic Update: Remove any previous reaction on this post before toggling the new one
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p._id !== post._id) return p;
+        const nextRx = {
+          ...(p.reactions || { fire: 0, skull: 0, eyes: 0, heart: 0 }),
+        };
+        const currentMy = Array.isArray(p.myReactions) ? p.myReactions : [];
+        const alreadyHadThis = currentMy.includes(type);
+
+        // Decrement any previously active reaction on this post
+        for (const prevType of currentMy) {
+          nextRx[prevType] = Math.max(0, (nextRx[prevType] || 1) - 1);
+        }
+
+        let nextMy: ReactionType[] = [];
+        if (!alreadyHadThis) {
+          nextRx[type] = (nextRx[type] || 0) + 1;
+          nextMy = [type];
+        }
+
+        try {
+          const cache = getLocalRxCache();
+          cache[post._id] = { reactions: nextRx, myReactions: nextMy };
+          localStorage.setItem(STORAGE_REACTIONS_CACHE, JSON.stringify(cache));
+        } catch {}
+
+        return {
+          ...p,
+          reactions: nextRx,
+          myReactions: nextMy,
+        };
+      })
+    );
+
+    // 2. Sync with Backend API (which also enforces 1 reaction per deviceId per post)
+    try {
+      const res = await reactToPost(post._id, type);
+      const singleMy = Array.isArray(res.myReactions)
+        ? res.myReactions.slice(0, 1)
+        : [];
+      try {
+        const cache = getLocalRxCache();
+        cache[post._id] = {
+          reactions: res.reactions,
+          myReactions: singleMy,
+        };
+        localStorage.setItem(STORAGE_REACTIONS_CACHE, JSON.stringify(cache));
+      } catch {}
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === post._id
+            ? {
+                ...p,
+                reactions: res.reactions,
+                myReactions: singleMy,
+              }
+            : p
+        )
+      );
+    } catch {}
+  };
+
   const handleSelectNearMe = () => {
     setFeedMode('near');
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -396,7 +708,6 @@ export default function EmousHomeApp() {
     }
   };
 
-  // 🎲 Card Shuffler
   const handleShuffleBackground = async () => {
     setIsShuffling(true);
     const nextBg = await shuffleCardBackground(draftBg.id);
@@ -404,7 +715,6 @@ export default function EmousHomeApp() {
     setIsShuffling(false);
   };
 
-  // Publish Visual Post
   const handlePublishPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draftContent.trim()) return;
@@ -412,7 +722,10 @@ export default function EmousHomeApp() {
     try {
       const created = await createPost({
         content: draftContent.trim(),
-        tag: draftTag,
+        tag:
+          draftTagMode === 'AUTO'
+            ? liveComposerClassification.primaryTag
+            : draftTagMode,
         background: draftBg,
         authorHandle: currentHandle,
         lat: coords.lat,
@@ -430,9 +743,16 @@ export default function EmousHomeApp() {
         }
         return next;
       });
+      if (!dynamicTags.includes(created.tag)) {
+        setDynamicTags((prev) => [created.tag, ...prev]);
+      }
       setDraftContent('');
+      setDraftTagMode('AUTO');
       setIsComposerOpen(false);
-      showToast('🔥 Visual card dropped to the feed!');
+      loadTrending();
+      showToast(
+        `🔥 Auto-categorized under ${created.tag} & dropped to the feed!`
+      );
     } catch (err: any) {
       showToast(err.message || 'Could not post');
     } finally {
@@ -440,7 +760,73 @@ export default function EmousHomeApp() {
     }
   };
 
-  // Crowdsourced Moderation: Flag Post (Auto-hides at 3 flags)
+  // Wow Feature #1: Drop an Anonymous Inbox Q&A Directly to the Public Visual Feed!
+  const handleDropQaToPublicFeed = async () => {
+    if (!activeStoryMsg) return;
+    const cleanReply = replyText.trim() || '🤫🔥';
+    const combinedContent = `🤫 Q: "${activeStoryMsg.question}" — ⚡ A: ${cleanReply}`.slice(
+      0,
+      300
+    );
+
+    setIsSavingReply(true);
+    try {
+      await replyToInboxMessage(activeStoryMsg._id, cleanReply, storyThemeId);
+      const created = await createPost({
+        content: combinedContent,
+        background: CURATED_GRADIENTS[0],
+        authorHandle: currentHandle,
+        lat: coords.lat,
+        lng: coords.lng,
+      });
+      setPosts((prev) => [created, ...prev]);
+      setActiveStoryMsg(null);
+      setActiveScreen('feed');
+      showToast('🚀 Q&A published to the Public Feed for everyone to read!');
+    } catch {
+      showToast('Could not publish Q&A to feed');
+    } finally {
+      setIsSavingReply(false);
+    }
+  };
+
+  // Wow Feature #2: Submit an Anonymous Whisper Comment under a post
+  const handleAddWhisperComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCommentPost || !commentText.trim()) return;
+    try {
+      const res = await addPostComment(
+        activeCommentPost._id,
+        commentText.trim(),
+        currentHandle
+      );
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === activeCommentPost._id
+            ? {
+                ...p,
+                comments: res.comments,
+                commentsCount: res.commentsCount,
+              }
+            : p
+        )
+      );
+      setActiveCommentPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments: res.comments,
+              commentsCount: res.commentsCount,
+            }
+          : null
+      );
+      setCommentText('');
+      showToast('💬 Anonymous whisper reply added!');
+    } catch {
+      showToast('Could not add whisper reply');
+    }
+  };
+
   const handleFlagPost = async (postId: string) => {
     try {
       const res = await flagPost(postId);
@@ -462,7 +848,6 @@ export default function EmousHomeApp() {
     }
   };
 
-  // Copy Shareable Inbox Link
   const handleCopyInboxLink = () => {
     const origin =
       typeof window !== 'undefined'
@@ -475,11 +860,15 @@ export default function EmousHomeApp() {
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  // Open 9:16 Story Share Generator Modal
   const handleOpenStoryGenerator = (msg: InboxMessageDTO) => {
     setActiveStoryMsg(msg);
     setReplyText(msg.reply || '');
     setStoryThemeId(msg.themeId || 'story-pink-lime');
+
+    // Wow Feature #3: If message is marked "Burn After Reading" and was already read once, warn user
+    if (msg.burnAfterReading && msg.isRead) {
+      showToast('💣 Flash Burn Note: Self-destructs when closed!');
+    }
   };
 
   const handleSaveReplyAndShare = async (downloadPngAfter = false) => {
@@ -530,108 +919,266 @@ export default function EmousHomeApp() {
     STORY_COLOR_PAIRS.find((t) => t.id === storyThemeId) ||
     STORY_COLOR_PAIRS[0];
 
+  const totalUnreadNotifications =
+    unreadCount + notifications.filter((n) => !n.isRead).length;
+
   return (
     <div className="min-h-screen pb-28">
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-emous-lime text-black font-display font-extrabold text-sm px-5 py-3 rounded-2xl flyer-card animate-bounce">
+        <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 bg-emous-lime text-black font-display font-extrabold text-xs sm:text-sm px-5 py-3 rounded-2xl flyer-card text-center animate-bounce">
           {toast}
         </div>
       )}
 
-      {/* Top Streetwear Navigation Header */}
+      {/* Top Streetwear Navigation Header with Active Notification Bell */}
       <header className="sticky top-0 z-30 bg-emous-bg/95 backdrop-blur-md border-b-4 border-black">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3.5 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between gap-2">
-          {/* Top Row on Mobile: Brand Logo + Zero-Friction Handle Pill */}
+          {/* Top Row on Mobile: Brand Logo + Handle + Active Notification Bell */}
           <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => setActiveScreen('feed')}
-              className="bg-emous-lime text-black font-display font-extrabold text-lg sm:text-2xl px-3 sm:px-4 py-1 rounded-xl sm:rounded-2xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0"
-            >
-              <span>emous</span>
-              <span className="text-[9px] sm:text-[10px] bg-black text-emous-yellow px-1.5 sm:px-2 py-0.5 rounded-full uppercase">
-                MVP
-              </span>
-            </button>
-
-            <div className="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 sm:px-3 py-1 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-emous-lime animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs font-extrabold text-emous-yellow truncate max-w-[115px] sm:max-w-[160px]">
-                @{currentHandle}
-              </span>
+            <div className="flex items-center gap-2">
               <button
-                onClick={async () => {
-                  setDemoGoldenWizardMode(false);
-                  const next = await rerollHandle();
-                  setIdentity(next);
-                  showToast(`🎲 Switched handle to @${next.handle}`);
+                onClick={() => {
+                  setActiveScreen('feed');
+                  setSelectedTag('All');
+                  setSelectedPhrase('');
                 }}
-                title="Roll a new random handle"
-                className="ml-0.5 text-neutral-400 hover:text-emous-pink shrink-0"
+                className="bg-emous-lime text-black font-display font-extrabold text-lg sm:text-2xl px-3 sm:px-4 py-1 rounded-xl sm:rounded-2xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0"
               >
-                <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span>emous</span>
+                <span className="text-[9px] sm:text-[10px] bg-black text-emous-yellow px-1.5 sm:px-2 py-0.5 rounded-full uppercase">
+                  LIVE
+                </span>
+              </button>
+
+              <div className="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-1 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emous-lime animate-pulse shrink-0" />
+                <span className="text-[11px] sm:text-xs font-extrabold text-emous-yellow truncate max-w-[100px] sm:max-w-[145px]">
+                  @{currentHandle}
+                </span>
+                <button
+                  onClick={async () => {
+                    setDemoGoldenWizardMode(false);
+                    const next = await rerollHandle();
+                    setIdentity(next);
+                    showToast(`🎲 Switched handle to @${next.handle}`);
+                  }}
+                  title="Roll a new random handle"
+                  className="ml-0.5 text-neutral-400 hover:text-emous-pink shrink-0"
+                >
+                  <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Active Notification Bell Icon Button */}
+            <div className="relative">
+              <button
+                onClick={() => setIsNotifOpen((prev) => !prev)}
+                className={`p-2 rounded-xl flyer-btn relative inline-flex items-center justify-center ${
+                  isNotifOpen
+                    ? 'bg-emous-yellow text-black'
+                    : 'bg-emous-surface text-white hover:bg-neutral-800'
+                }`}
+                title="Live Notifications & Auto-Refresh Activity"
+              >
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-emous-pink text-white border-2 border-black text-[9px] font-extrabold px-1.5 rounded-full animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Primary Screen Switcher: Equal 3-column grid on mobile, inline flex on desktop */}
-          <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2.5">
+          {/* Primary Screen Switcher: 4 Tabs (Feed | Trending | Inbox | + Card) */}
+          <div className="grid grid-cols-4 sm:flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => setActiveScreen('feed')}
-              className={`px-2.5 sm:px-4 py-2 rounded-xl font-display font-extrabold text-[11px] sm:text-sm uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
+              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
                 activeScreen === 'feed'
                   ? 'bg-emous-pink text-white'
                   : 'bg-emous-surface text-white'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <Flame className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">Feed</span>
             </button>
 
             <button
+              onClick={() => {
+                setActiveScreen('trending');
+                loadTrending();
+              }}
+              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
+                activeScreen === 'trending'
+                  ? 'bg-emous-yellow text-black'
+                  : 'bg-emous-surface text-white'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Trending</span>
+            </button>
+
+            <button
               onClick={() => setActiveScreen('inbox')}
-              className={`px-2.5 sm:px-4 py-2 rounded-xl font-display font-extrabold text-[11px] sm:text-sm uppercase flyer-btn flex items-center justify-center gap-1 relative truncate ${
+              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 relative truncate ${
                 activeScreen === 'inbox'
                   ? 'bg-emous-lime text-black'
                   : 'bg-emous-surface text-white'
               }`}
             >
-              <MessageSquareHeart className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <MessageSquareHeart className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">Inbox</span>
-              {unreadCount > 0 && (
-                <span className="bg-emous-pink text-white border border-black text-[9px] sm:text-[10px] font-extrabold px-1.5 rounded-full shrink-0">
-                  {unreadCount}
+              {inboxMessages.length > 0 && (
+                <span className="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0">
+                  {inboxMessages.length}
                 </span>
               )}
             </button>
 
             <button
               onClick={() => setIsComposerOpen(true)}
-              className="bg-emous-yellow text-black font-display font-extrabold text-[11px] sm:text-sm px-2.5 sm:px-3.5 py-2 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 truncate"
+              className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-2 sm:px-3.5 py-2 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 truncate"
             >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0" />
+              <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
               <span className="truncate">Card</span>
             </button>
           </div>
         </div>
+
+        {/* Active Notification Bell Drawer Dropdown */}
+        {isNotifOpen && (
+          <div className="max-w-md ml-auto mr-3 sm:mr-6 mb-3 bg-emous-surface rounded-2xl p-4 flyer-card space-y-3 border-2 border-black z-50">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="bg-emous-lime text-black font-display font-extrabold text-[10px] px-2.5 py-0.5 rounded-full border border-black uppercase">
+                  🔔 LIVE ACTIVITY
+                </span>
+                <span className="text-[11px] text-neutral-400 font-bold">
+                  • Auto-Refresh Active ({lastUpdatedLabel})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setSoundEnabled((prev) => !prev)}
+                  className="bg-black text-xs px-2.5 py-1 rounded-lg border border-white/20 inline-flex items-center gap-1 font-bold"
+                  title="Toggle notification chime sound"
+                >
+                  {soundEnabled ? (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-emous-lime" />
+                      <span className="text-[10px]">Sound ON</span>
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-3.5 h-3.5 text-neutral-400" />
+                      <span className="text-[10px]">Muted</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsNotifOpen(false)}
+                  className="bg-black text-white px-2 py-0.5 rounded-lg text-xs font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {notifications.length === 0 ? (
+              <p className="text-xs text-neutral-400 py-3 text-center">
+                No notifications yet. Drop your inbox link or post a card!
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {notifications.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      setActiveScreen(n.targetScreen);
+                      setIsNotifOpen(false);
+                    }}
+                    className="w-full text-left bg-black/75 hover:bg-black p-2.5 rounded-xl border border-white/15 flex items-start justify-between gap-2 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-extrabold text-emous-yellow truncate">
+                        {n.title}
+                      </p>
+                      <p className="text-[11px] text-neutral-300 truncate">
+                        {n.subtitle}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-neutral-400 font-bold shrink-0">
+                      {formatRelativeTime(n.createdAt)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                onClick={() => {
+                  loadFeed(false);
+                  loadInbox(false);
+                  loadTrending();
+                  showToast('⚡ Live Feed & Inbox synced!');
+                }}
+                className="text-[11px] font-extrabold text-emous-lime hover:underline inline-flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Sync Now</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveScreen('inbox');
+                  setIsNotifOpen(false);
+                }}
+                className="bg-emous-pink text-white font-display font-extrabold text-[10px] px-3 py-1 rounded-lg border border-black uppercase"
+              >
+                Open Secret Inbox →
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* =====================================================================
-          SCREEN 1: THE VISUAL FEED (Global Tags & 5-Mile Near Me Toggle)
+          SCREEN 1: THE VISUAL FEED (Dynamic Tags & 5-Mile Near Me Toggle)
          ===================================================================== */}
       {activeScreen === 'feed' && (
-        <main className="max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-4 sm:space-y-6">
+        <main className="max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-4 sm:space-y-5">
           {/* Feed Mode Toggle Switch + Active GPS / Filter Bar */}
           <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flyer-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
-              <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] sm:text-[11px] uppercase px-2 py-0.5 rounded border border-black mb-1">
-                ZERO-LOGIN COMMUNITY FEED
-              </span>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] sm:text-[10px] uppercase px-2 py-0.5 rounded border border-black">
+                  DYNAMIC AUTO-CATEGORIZED FEED
+                </span>
+                <span className="text-[10px] font-bold text-emous-lime">
+                  • Auto-Refreshes every 10s
+                </span>
+              </div>
               <h1 className="font-display font-extrabold text-lg sm:text-3xl text-white leading-tight">
                 {feedMode === 'global'
-                  ? '🌐 Global Tags Feed'
+                  ? '🌐 Global Anonymous Feed'
                   : '📍 Near Me (5-Mile Radius)'}
               </h1>
+              {selectedPhrase && (
+                <div className="mt-1.5 inline-flex items-center gap-2 bg-emous-pink text-white text-xs font-extrabold px-3 py-1 rounded-full border-2 border-black">
+                  <span>🔍 Filtering by phrase: “{selectedPhrase}”</span>
+                  <button
+                    onClick={() => setSelectedPhrase('')}
+                    className="bg-black text-white px-1.5 rounded-full text-[10px]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               {feedMode === 'near' && (
                 <p className="text-[11px] sm:text-xs font-bold text-emous-lime mt-0.5 flex items-center gap-1 truncate">
                   <MapPin className="w-3.5 h-3.5 shrink-0" />
@@ -644,49 +1191,60 @@ export default function EmousHomeApp() {
             <div className="bg-black p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border-2 border-white/15 grid grid-cols-2 w-full sm:w-auto sm:inline-flex shrink-0">
               <button
                 onClick={() => setFeedMode('global')}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-display font-extrabold text-[11px] sm:text-sm uppercase transition-all flex items-center justify-center gap-1.5 truncate ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-display font-extrabold text-[11px] sm:text-xs uppercase transition-all flex items-center justify-center gap-1.5 truncate ${
                   feedMode === 'global'
                     ? 'bg-emous-lime text-black shadow-brutal'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <Globe className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Global Tags</span>
               </button>
               <button
                 onClick={handleSelectNearMe}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-display font-extrabold text-[11px] sm:text-sm uppercase transition-all flex items-center justify-center gap-1.5 truncate ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-display font-extrabold text-[11px] sm:text-xs uppercase transition-all flex items-center justify-center gap-1.5 truncate ${
                   feedMode === 'near'
                     ? 'bg-emous-pink text-white shadow-brutal'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Near Me (5mi)</span>
               </button>
             </div>
           </div>
 
-          {/* Auto-Scrolling Streetwear Hashtag Color-Blocked Pills (pauses on hover) */}
+          {/* Dynamic Auto-Scrolling Hashtag Ticker Bar (Computed from actual posts & NLP topics) */}
           <div
             className="tag-marquee-viewport no-scrollbar"
-            title="Hover to pause scrolling tags"
+            title="Hover to pause dynamic scrolling tags"
           >
             <div className="tag-marquee-track">
-              {[...['All', ...POPULAR_TAGS], ...['All', ...POPULAR_TAGS]].map(
+              {[...['All', ...dynamicTags], ...['All', ...dynamicTags]].map(
                 (tag, idx) => {
-                  const active = selectedTag === tag;
+                  const active = selectedTag === tag && !selectedPhrase;
+                  const stat = trendingTags.find(
+                    (t) => t.tag.toLowerCase() === tag.toLowerCase()
+                  );
                   return (
                     <button
                       key={`${tag}-${idx}`}
-                      onClick={() => setSelectedTag(tag)}
-                      className={`shrink-0 px-4 py-2 rounded-full font-display font-extrabold text-xs uppercase flyer-btn ${
+                      onClick={() => {
+                        setSelectedTag(tag);
+                        setSelectedPhrase('');
+                      }}
+                      className={`shrink-0 px-3.5 py-1.5 sm:py-2 rounded-full font-display font-extrabold text-[11px] sm:text-xs uppercase flyer-btn inline-flex items-center gap-1.5 ${
                         active
                           ? 'bg-emous-yellow text-black'
                           : 'bg-emous-surface text-white hover:bg-neutral-800'
                       }`}
                     >
-                      {tag}
+                      <span>{tag}</span>
+                      {stat && stat.count > 0 && (
+                        <span className="bg-black/80 text-emous-lime text-[9px] px-1.5 py-0.2 rounded-full">
+                          {stat.count}
+                        </span>
+                      )}
                     </button>
                   );
                 }
@@ -696,28 +1254,40 @@ export default function EmousHomeApp() {
 
           {/* Visual Content Cards Grid */}
           {isLoadingFeed ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {[1, 2, 3, 4].map((n) => (
                 <div
                   key={n}
-                  className="h-72 rounded-3xl bg-emous-surface animate-pulse flyer-card"
+                  className="h-64 rounded-3xl bg-emous-surface animate-pulse flyer-card"
                 />
               ))}
             </div>
           ) : posts.length === 0 ? (
-            <div className="bg-emous-surface rounded-3xl p-10 text-center flyer-card space-y-4">
-              <p className="font-display font-extrabold text-2xl text-emous-yellow">
-                No confessions in this filter yet 👀
+            <div className="bg-emous-surface rounded-3xl p-8 text-center flyer-card space-y-4">
+              <p className="font-display font-extrabold text-xl text-emous-yellow">
+                No confessions matched{' '}
+                {selectedPhrase ? `“${selectedPhrase}”` : selectedTag} yet 👀
               </p>
-              <button
-                onClick={() => setIsComposerOpen(true)}
-                className="bg-emous-pink text-white font-display font-extrabold px-6 py-3 rounded-2xl flyer-btn uppercase text-sm"
-              >
-                Be the First to Drop One 🚀
-              </button>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedTag('All');
+                    setSelectedPhrase('');
+                  }}
+                  className="bg-white text-black font-display font-extrabold px-5 py-2.5 rounded-2xl flyer-btn uppercase text-xs"
+                >
+                  Reset Filter
+                </button>
+                <button
+                  onClick={() => setIsComposerOpen(true)}
+                  className="bg-emous-pink text-white font-display font-extrabold px-5 py-2.5 rounded-2xl flyer-btn uppercase text-xs"
+                >
+                  Drop First Confession 🚀
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {posts.map((post) => {
                 const isImage = post.background?.type === 'image';
                 const cardStyle: React.CSSProperties = isImage
@@ -735,11 +1305,16 @@ export default function EmousHomeApp() {
                   ? '#FFFFFF'
                   : post.background?.textColor || '#FFFFFF';
 
+                // Active single reaction for this user on this post
+                const activeUserReaction = post.myReactions?.[0] || null;
+                const commentsCount =
+                  post.commentsCount ?? post.comments?.length ?? 0;
+
                 return (
                   <article
                     key={post._id}
                     style={cardStyle}
-                    className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 flyer-card flex flex-col justify-between min-h-[205px] sm:min-h-[250px] relative overflow-hidden group transition-transform hover:-translate-y-1"
+                    className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 flyer-card flex flex-col justify-between min-h-[215px] sm:min-h-[250px] relative overflow-hidden group transition-transform hover:-translate-y-0.5"
                   >
                     {/* Top Row: Anonymous Handle Pill + Electric Yellow Timestamp */}
                     <div className="flex items-center justify-between gap-1.5 min-w-0 z-10">
@@ -747,7 +1322,9 @@ export default function EmousHomeApp() {
                         href={`/ask/${post.authorHandle}`}
                         className="bg-black/85 text-white text-[11px] sm:text-xs font-extrabold px-2.5 sm:px-3 py-1 rounded-full border-2 border-black inline-flex items-center gap-1 hover:bg-emous-pink transition-colors truncate max-w-[55%]"
                       >
-                        <span className="truncate">🎭 @{post.authorHandle}</span>
+                        <span className="truncate">
+                          🎭 @{post.authorHandle}
+                        </span>
                       </Link>
 
                       <div className="flex items-center gap-1 shrink-0">
@@ -766,7 +1343,7 @@ export default function EmousHomeApp() {
                       </div>
                     </div>
 
-                    {/* Center: Bold 300-Char Confession Copy (Responsive font size on mobile) */}
+                    {/* Center: Bold 300-Char Confession Copy */}
                     <p
                       style={{ color: textColor }}
                       className="my-4 sm:my-5 font-sans font-extrabold text-[15px] sm:text-lg md:text-xl leading-relaxed tracking-tight break-words z-10 drop-shadow-sm"
@@ -774,104 +1351,48 @@ export default function EmousHomeApp() {
                       “{post.content}”
                     </p>
 
-                    {/* Phase 4: Emoji Reactions Row (🔥, 💀, 👀, ❤️) */}
-                    <div className="flex items-center gap-1.5 flex-wrap pb-2 z-10">
-                      {REACTION_TYPES.map((type) => {
-                        const meta = REACTION_META[type];
-                        const count = post.reactions?.[type] ?? 0;
-                        const active = post.myReactions?.includes(type);
-                        return (
-                          <button
-                            key={type}
-                            onClick={async () => {
-                              // 1. Optimistic instant update + localStorage persistence
-                              setPosts((prev) =>
-                                prev.map((p) => {
-                                  if (p._id !== post._id) return p;
-                                  const nextRx = {
-                                    ...(p.reactions || {
-                                      fire: 0,
-                                      skull: 0,
-                                      eyes: 0,
-                                      heart: 0,
-                                    }),
-                                  };
-                                  const nextMy = Array.isArray(p.myReactions)
-                                    ? [...p.myReactions]
-                                    : [];
-                                  const idx = nextMy.indexOf(type);
-                                  if (idx >= 0) {
-                                    nextMy.splice(idx, 1);
-                                    nextRx[type] = Math.max(
-                                      0,
-                                      (nextRx[type] || 1) - 1
-                                    );
-                                  } else {
-                                    nextMy.push(type);
-                                    nextRx[type] = (nextRx[type] || 0) + 1;
-                                  }
-                                  try {
-                                    const cache = getLocalRxCache();
-                                    cache[post._id] = {
-                                      reactions: nextRx,
-                                      myReactions: nextMy,
-                                    };
-                                    localStorage.setItem(
-                                      STORAGE_REACTIONS_CACHE,
-                                      JSON.stringify(cache)
-                                    );
-                                  } catch {}
-                                  return {
-                                    ...p,
-                                    reactions: nextRx,
-                                    myReactions: nextMy,
-                                  };
-                                })
-                              );
-                              // 2. Sync to Backend API
-                              try {
-                                const res = await reactToPost(post._id, type);
-                                try {
-                                  const cache = getLocalRxCache();
-                                  cache[post._id] = {
-                                    reactions: res.reactions,
-                                    myReactions: res.myReactions,
-                                  };
-                                  localStorage.setItem(
-                                    STORAGE_REACTIONS_CACHE,
-                                    JSON.stringify(cache)
-                                  );
-                                } catch {}
-                                setPosts((prev) =>
-                                  prev.map((p) =>
-                                    p._id === post._id
-                                      ? {
-                                          ...p,
-                                          reactions: res.reactions,
-                                          myReactions: res.myReactions,
-                                        }
-                                      : p
-                                  )
-                                );
-                              } catch {}
-                            }}
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold border-2 border-black shadow-brutal transition-transform active:scale-95 ${
-                              active
-                                ? 'bg-emous-yellow text-black'
-                                : 'bg-black/80 text-white hover:bg-black'
-                            }`}
-                          >
-                            <span>{meta.emoji}</span>
-                            <span>{count}</span>
-                          </button>
-                        );
-                      })}
+                    {/* Exclusive Single Reaction Row (1 User = Max 1 Reaction Per Post) + Whisper Thread Count */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 z-10">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {REACTION_TYPES.map((type) => {
+                          const meta = REACTION_META[type];
+                          const count = post.reactions?.[type] ?? 0;
+                          const isSelected = activeUserReaction === type;
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => handleSingleReaction(post, type)}
+                              title={`React with ${meta.label} (1 reaction allowed per post)`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold border-2 border-black shadow-brutal transition-transform active:scale-95 ${
+                                isSelected
+                                  ? 'bg-emous-yellow text-black scale-105'
+                                  : 'bg-black/80 text-white hover:bg-black'
+                              }`}
+                            >
+                              <span>{meta.emoji}</span>
+                              <span>{count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Wow Feature #2: Anonymous Whisper Thread Trigger */}
+                      <button
+                        onClick={() => setActiveCommentPost(post)}
+                        className="bg-black/85 hover:bg-emous-lime hover:text-black text-emous-lime text-[11px] font-extrabold px-2.5 py-1 rounded-full border-2 border-black shadow-brutal inline-flex items-center gap-1 transition-colors"
+                      >
+                        <span>💬 {commentsCount}</span>
+                        <span className="hidden sm:inline">Whispers</span>
+                      </button>
                     </div>
 
                     {/* Bottom Row: Icon-Only Action Pills that reveal labels on hover */}
-                    <div className="flex items-center justify-between gap-2 pt-2 z-10">
+                    <div className="flex items-center justify-between gap-2 pt-1 z-10">
                       <button
-                        onClick={() => setSelectedTag(post.tag)}
+                        onClick={() => {
+                          setSelectedTag(post.tag);
+                          setSelectedPhrase('');
+                        }}
                         style={{
                           backgroundColor:
                             post.background?.badgeBg || '#CCFF00',
@@ -886,7 +1407,21 @@ export default function EmousHomeApp() {
                         </span>
                       </button>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            downloadFeedCardStoryPng(post);
+                            showToast(
+                              '📸 Downloaded 9:16 Feed Card Story PNG!'
+                            );
+                          }}
+                          className="card-action-pill bg-emous-yellow text-black hover:bg-emous-lime"
+                          aria-label="Share Story"
+                        >
+                          <Share2 className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                          <span className="card-action-label">Share Story</span>
+                        </button>
+
                         <Link
                           href={`/ask/${post.authorHandle}`}
                           className="card-action-pill bg-white text-black hover:bg-emous-lime"
@@ -923,28 +1458,159 @@ export default function EmousHomeApp() {
       )}
 
       {/* =====================================================================
-          SCREEN 2: "GET YOUR LINK" INBOX DASHBOARD
+          NEW TAB: DEDICATED 📈 TRENDING RADAR (Dynamic Tags & Frequent Phrases)
+         ===================================================================== */}
+      {activeScreen === 'trending' && (
+        <main className="max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-6">
+          {/* Trending Hero & Time Window Switcher */}
+          <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-4 sm:p-6 flyer-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded border border-black mb-1">
+                📈 LIVE NLP TRENDING RADAR
+              </span>
+              <h1 className="font-display font-extrabold text-xl sm:text-3xl text-white">
+                What Everyone Is Confessing About
+              </h1>
+              <p className="text-xs text-neutral-300 font-semibold mt-0.5">
+                Auto-categorized by hashtags & frequently used phrases (“work”,
+                “office”, “crypto”, “sex”, “gym”, “politics”, “religion”...)
+              </p>
+            </div>
+
+            <div className="bg-black p-1 rounded-xl border-2 border-white/15 inline-flex gap-1 shrink-0">
+              {(
+                [
+                  { id: '24h', label: '🔥 24 Hours' },
+                  { id: '7d', label: '⚡ 7 Days' },
+                  { id: 'all', label: '🌐 All Time' },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setTrendingPeriod(p.id)}
+                  className={`px-3 py-1.5 rounded-lg font-display font-extrabold text-xs uppercase ${
+                    trendingPeriod === p.id
+                      ? 'bg-emous-lime text-black'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 1: Trending Dynamic Hashtag Categories Leaderboard */}
+          <div className="space-y-3">
+            <h2 className="font-display font-extrabold text-lg sm:text-xl flex items-center gap-2">
+              <span>🏷️ Trending Topic Categories</span>
+              <span className="text-xs text-neutral-400 font-sans font-bold">
+                (Click any category to read confessions)
+              </span>
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+              {trendingTags.map((item, idx) => (
+                <button
+                  key={item.tag}
+                  onClick={() => {
+                    setSelectedTag(item.tag);
+                    setSelectedPhrase('');
+                    setActiveScreen('feed');
+                  }}
+                  className="bg-emous-surface hover:bg-neutral-800 text-left rounded-2xl p-4 flyer-card flex flex-col justify-between gap-2 transition-transform hover:-translate-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-black">
+                      #{idx + 1} TRENDING
+                    </span>
+                    <span className="text-xs font-extrabold text-emous-lime">
+                      🔥 {item.reactionsCount}
+                    </span>
+                  </div>
+                  <p className="font-display font-extrabold text-base sm:text-lg text-white truncate">
+                    {item.tag}
+                  </p>
+                  <p className="text-[11px] font-bold text-neutral-400">
+                    {item.count} {item.count === 1 ? 'confession' : 'confessions'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 2: Frequently Used Words & Phrases Cloud */}
+          <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-5 flyer-card space-y-4">
+            <div>
+              <span className="bg-emous-pink text-white font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full border border-black">
+                💬 FREQUENTLY USED PHRASES & KEYWORDS
+              </span>
+              <h2 className="font-display font-extrabold text-lg sm:text-2xl mt-1">
+                Hot Words Detected Inside Confessions
+              </h2>
+              <p className="text-xs text-neutral-400 font-semibold">
+                Tap any word below to filter the anonymous feed by that keyword
+                or phrase:
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+              {trendingPhrases.map((item, idx) => {
+                const isTop3 = idx < 3;
+                return (
+                  <button
+                    key={item.phrase}
+                    onClick={() => {
+                      setSelectedTag('All');
+                      setSelectedPhrase(item.phrase);
+                      setActiveScreen('feed');
+                    }}
+                    className={`px-3.5 py-2 rounded-2xl flyer-btn inline-flex items-center gap-2 ${
+                      isTop3
+                        ? 'bg-emous-lime text-black'
+                        : 'bg-black text-white hover:bg-emous-yellow hover:text-black'
+                    }`}
+                  >
+                    <span className="font-display font-extrabold text-xs sm:text-sm uppercase">
+                      “{item.phrase}”
+                    </span>
+                    {item.category && (
+                      <span className="text-[10px] font-extrabold opacity-75">
+                        {item.category}
+                      </span>
+                    )}
+                    <span className="bg-emous-pink text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full border border-black">
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* =====================================================================
+          SCREEN 2: "GET YOUR LINK" INBOX DASHBOARD (with 30d Countdown & Hints)
          ===================================================================== */}
       {activeScreen === 'inbox' && (
-        <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
-          {/* Bright Hook Banner */}
-          <div className="bg-emous-lime text-black rounded-3xl p-6 sm:p-8 flyer-card relative overflow-hidden">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <main className="max-w-4xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-6">
+          <div className="bg-emous-lime text-black rounded-2xl sm:rounded-3xl p-5 sm:p-8 flyer-card relative overflow-hidden">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-2 max-w-xl">
                 <div className="inline-flex items-center gap-2 bg-black text-emous-yellow text-xs font-display font-extrabold px-3 py-1 rounded-full uppercase">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>VIRAL ANONYMOUS INBOX</span>
+                  <span>30-DAY AUTO-BURN SECRET INBOX</span>
                 </div>
-                <h1 className="font-display font-extrabold text-2xl sm:text-4xl leading-tight">
+                <h1 className="font-display font-extrabold text-xl sm:text-4xl leading-tight">
                   {BRAND.inboxHook}
                 </h1>
-                <p className="text-sm font-bold text-neutral-800">
-                  Anyone with your link can drop anonymous confessions from the
-                  web with zero login. All messages auto-burn in 30 days! 🔥
+                <p className="text-xs sm:text-sm font-bold text-neutral-800">
+                  Zero download required for senders. Every secret note has a
+                  live 30-day self-destruct timer! 🔥
                 </p>
               </div>
 
-              {/* Switch between your handle & @GoldenWizard demo inbox */}
               <button
                 onClick={() => setDemoGoldenWizardMode((prev) => !prev)}
                 className="bg-white text-black text-xs font-extrabold px-3.5 py-2 rounded-xl border-2 border-black shadow-brutal self-start md:self-center shrink-0"
@@ -955,30 +1621,29 @@ export default function EmousHomeApp() {
               </button>
             </div>
 
-            {/* Unmissable Link Copy Box */}
-            <div className="mt-6 bg-white rounded-2xl p-3 sm:p-4 border-3 border-black shadow-brutal flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3 px-2 overflow-hidden">
+            <div className="mt-5 bg-white rounded-2xl p-3 sm:p-4 border-2 border-black shadow-brutal flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 px-2 overflow-hidden">
                 <span className="bg-emous-pink text-white font-display font-extrabold text-xs px-2.5 py-1 rounded-lg border-2 border-black shrink-0">
                   LINK
                 </span>
-                <span className="font-display font-extrabold text-base sm:text-xl text-black truncate">
-                  emous.app/ask/{currentHandle}
+                <span className="font-display font-extrabold text-sm sm:text-xl text-black truncate">
+                  {BRAND.domain}/ask/{currentHandle}
                 </span>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={handleCopyInboxLink}
-                  className="flex-1 sm:flex-initial bg-emous-pink text-white font-display font-extrabold text-sm sm:text-base px-5 py-3 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-2"
+                  className="flex-1 sm:flex-initial bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm px-4 py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1.5"
                 >
                   {copiedLink ? (
                     <>
-                      <Check className="w-5 h-5" />
+                      <Check className="w-4 h-4" />
                       <span>Copied!</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-5 h-5" />
+                      <Copy className="w-4 h-4" />
                       <span>Copy My Link 🔗</span>
                     </>
                   )}
@@ -986,12 +1651,10 @@ export default function EmousHomeApp() {
 
                 <Link
                   href={`/ask/${currentHandle}`}
-                  target="_blank"
-                  className="bg-emous-yellow text-black font-display font-extrabold text-sm px-4 py-3 rounded-xl flyer-btn inline-flex items-center gap-1.5"
-                  title="Open your public web receiver landing page"
+                  className="bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span className="hidden md:inline">Test Receiver</span>
+                  <span>Open Receiver</span>
                 </Link>
               </div>
             </div>
@@ -1000,31 +1663,30 @@ export default function EmousHomeApp() {
           {/* Inbox Secret Notes Grid */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-display font-extrabold text-xl sm:text-2xl flex items-center gap-2">
+              <h2 className="font-display font-extrabold text-lg sm:text-2xl flex items-center gap-2">
                 <span>🕵️ Secret Notes for @{currentHandle}</span>
                 <span className="bg-emous-yellow text-black text-xs px-2.5 py-0.5 rounded-full border-2 border-black">
                   {inboxMessages.length}
                 </span>
               </h2>
               <button
-                onClick={loadInbox}
+                onClick={() => loadInbox(false)}
                 className="text-xs font-bold text-emous-lime hover:underline inline-flex items-center gap-1"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Refresh Inbox</span>
+                <span>Refresh</span>
               </button>
             </div>
 
             {inboxMessages.length === 0 ? (
-              <div className="bg-emous-surface rounded-3xl p-10 text-center flyer-card space-y-4">
+              <div className="bg-emous-surface rounded-3xl p-8 text-center flyer-card space-y-4">
                 <p className="font-display font-extrabold text-xl text-emous-yellow">
                   Your secret inbox is waiting for its first confession! 🤫
                 </p>
-                <p className="text-sm text-neutral-300 max-w-md mx-auto">
-                  Tap <strong>Test Receiver</strong> above to send yourself a
+                <p className="text-xs sm:text-sm text-neutral-300 max-w-md mx-auto">
+                  Tap <strong>Open Receiver</strong> above to send yourself a
                   test anonymous message, or switch to{' '}
-                  <strong>@GoldenWizard Demo Inbox</strong> to inspect pre-loaded
-                  confessions.
+                  <strong>@GoldenWizard Demo Inbox</strong>.
                 </p>
               </div>
             ) : (
@@ -1033,48 +1695,90 @@ export default function EmousHomeApp() {
                   const pair =
                     STORY_COLOR_PAIRS.find((t) => t.id === msg.themeId) ||
                     STORY_COLOR_PAIRS[0];
+                  const showHint = Boolean(revealedHints[msg._id]);
                   return (
                     <div
                       key={msg._id}
-                      className="bg-emous-surface rounded-3xl p-5 flyer-card flex flex-col justify-between gap-4 border-3 border-black relative"
+                      className="bg-emous-surface rounded-3xl p-5 flyer-card flex flex-col justify-between gap-3.5 border-2 border-black relative"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span
                           style={{
                             backgroundColor: msg.isRead ? '#FFE600' : '#FF1E8E',
                             color: msg.isRead ? '#0D0D11' : '#FFFFFF',
                           }}
-                          className="text-[11px] font-display font-extrabold uppercase px-3 py-1 rounded-full border-2 border-black"
+                          className="text-[10px] font-display font-extrabold uppercase px-2.5 py-0.5 rounded-full border-2 border-black"
                         >
-                          {msg.isRead ? '✉️ Opened Note' : '🔥 New Secret Note'}
+                          {msg.burnAfterReading
+                            ? '💣 Flash Burn Note'
+                            : msg.isRead
+                            ? '✉️ Opened Note'
+                            : '🔥 New Secret Note'}
                         </span>
 
-                        <span className="text-xs font-bold text-neutral-400">
-                          {formatRelativeTime(msg.createdAt)} • Burns in 30d
+                        {/* Wow Feature #3: Live Ticking 30-Day Burn Countdown */}
+                        <span className="bg-black text-emous-yellow text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-white/15 inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emous-pink" />
+                          <span>🔥 {formatBurnCountdown(msg.createdAt)}</span>
                         </span>
                       </div>
 
-                      {/* Question Bubble */}
                       <div
                         style={{
                           backgroundColor: pair.topCardBg,
                           color: pair.topCardText,
                         }}
-                        className="rounded-2xl p-4 border-2 border-black shadow-brutal font-sans font-extrabold text-lg"
+                        className="rounded-2xl p-4 border-2 border-black shadow-brutal font-sans font-extrabold text-base sm:text-lg"
                       >
                         “{msg.question}”
                       </div>
 
-                      {/* Existing Reply Preview if answered */}
+                      {/* Wow Feature #4: Anonymous Sender Hint Peek */}
+                      <div>
+                        {showHint ? (
+                          <div className="bg-black/80 text-emous-lime text-[11px] font-bold px-3 py-1.5 rounded-xl border border-emous-lime/40 flex items-center justify-between">
+                            <span>
+                              🔍 Clue:{' '}
+                              {msg.senderHint ||
+                                '📱 Sent from Mobile Web • Night Owl'}
+                            </span>
+                            <button
+                              onClick={() =>
+                                setRevealedHints((prev) => ({
+                                  ...prev,
+                                  [msg._id]: false,
+                                }))
+                              }
+                              className="text-neutral-400 text-[10px]"
+                            >
+                              Hide
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setRevealedHints((prev) => ({
+                                ...prev,
+                                [msg._id]: true,
+                              }))
+                            }
+                            className="text-[11px] font-extrabold text-emous-yellow hover:underline inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>🔍 Peek Anonymous Sender Clue</span>
+                          </button>
+                        )}
+                      </div>
+
                       {msg.reply && (
                         <div
                           style={{
                             backgroundColor: pair.bottomCardBg,
                             color: pair.bottomCardText,
                           }}
-                          className="rounded-2xl p-3.5 border-2 border-black text-sm font-bold"
+                          className="rounded-2xl p-3 border-2 border-black text-xs sm:text-sm font-bold"
                         >
-                          <span className="block text-[10px] uppercase font-extrabold opacity-75 mb-0.5">
+                          <span className="block text-[9px] uppercase font-extrabold opacity-75 mb-0.5">
                             Your Story Reply:
                           </span>
                           {msg.reply}
@@ -1084,13 +1788,13 @@ export default function EmousHomeApp() {
                       <div className="flex items-center justify-between gap-2 pt-1">
                         <button
                           onClick={() => handleOpenStoryGenerator(msg)}
-                          className="flex-1 bg-emous-lime text-black font-display font-extrabold text-xs sm:text-sm py-2.5 px-4 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-2"
+                          className="flex-1 bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1.5"
                         >
                           <Share2 className="w-4 h-4" />
                           <span>
                             {msg.reply
-                              ? 'Share 9:16 Story Card'
-                              : 'Reply & Share Story 📸'}
+                              ? 'Share 9:16 / Public Feed'
+                              : 'Reply & Share 📸'}
                           </span>
                         </button>
 
@@ -1112,11 +1816,11 @@ export default function EmousHomeApp() {
       )}
 
       {/* =====================================================================
-          MODAL 1: CREATE VISUAL CARD POST + 🎲 CARD SHUFFLER
+          MODAL 1: CREATE VISUAL CARD POST + DYNAMIC NLP AUTO-CATEGORIZATION
          ===================================================================== */}
       {isComposerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-emous-surface w-full max-w-lg rounded-3xl p-6 flyer-card space-y-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-emous-surface w-full max-w-lg rounded-3xl p-5 flyer-card space-y-4 my-auto">
             <div className="flex items-center justify-between">
               <span className="bg-emous-lime text-black font-display font-extrabold text-xs uppercase px-3 py-1 rounded-full border-2 border-black">
                 NEW VISUAL CONFESSION
@@ -1130,7 +1834,6 @@ export default function EmousHomeApp() {
             </div>
 
             <form onSubmit={handlePublishPost} className="space-y-4">
-              {/* Live Visual Card Preview with 🎲 Shuffler */}
               <div
                 style={
                   draftBg.type === 'image'
@@ -1141,7 +1844,7 @@ export default function EmousHomeApp() {
                       }
                     : { background: draftBg.value }
                 }
-                className="rounded-3xl p-5 flyer-card min-h-[220px] flex flex-col justify-between"
+                className="rounded-3xl p-4 sm:p-5 flyer-card min-h-[200px] flex flex-col justify-between"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="bg-black/80 text-white text-xs font-extrabold px-3 py-1 rounded-full">
@@ -1152,10 +1855,10 @@ export default function EmousHomeApp() {
                     type="button"
                     onClick={handleShuffleBackground}
                     disabled={isShuffling}
-                    className="bg-emous-yellow text-black font-display font-extrabold text-xs px-3.5 py-1.5 rounded-full border-2 border-black shadow-brutal inline-flex items-center gap-1.5 hover:bg-emous-lime transition-transform active:scale-95"
+                    className="bg-emous-yellow text-black font-display font-extrabold text-xs px-3 py-1 rounded-full border-2 border-black shadow-brutal inline-flex items-center gap-1 hover:bg-emous-lime"
                   >
                     <Dices className="w-4 h-4" />
-                    <span>🎲 Shuffle BG ({draftBg.name})</span>
+                    <span>🎲 Shuffle BG</span>
                   </button>
                 </div>
 
@@ -1165,15 +1868,15 @@ export default function EmousHomeApp() {
                     setDraftContent(e.target.value.slice(0, BRAND.maxPostLength))
                   }
                   rows={3}
-                  placeholder="Drop an anonymous confession, unpopular opinion, or local sighting..."
+                  placeholder="Type your confession (use a #hashtag or mention work, office, sex, crypto, gym, politics, religion — we auto-categorize it!)"
                   style={{
                     color:
                       draftBg.type === 'image' ? '#FFFFFF' : draftBg.textColor,
                   }}
-                  className="w-full bg-transparent placeholder:text-current/65 font-sans font-extrabold text-xl focus:outline-none resize-none my-3"
+                  className="w-full bg-transparent placeholder:text-current/65 font-sans font-extrabold text-base sm:text-xl focus:outline-none resize-none my-3"
                 />
 
-                <div className="flex items-center justify-between text-xs font-extrabold">
+                <div className="flex items-center justify-between text-xs font-extrabold flex-wrap gap-2">
                   <span
                     style={{
                       backgroundColor: draftBg.badgeBg,
@@ -1181,7 +1884,7 @@ export default function EmousHomeApp() {
                     }}
                     className="px-3 py-1 rounded-lg border-2 border-black"
                   >
-                    {draftTag}
+                    ✨ Auto-Tag: {liveComposerClassification.primaryTag}
                   </span>
                   <span className="bg-black/75 text-white px-2.5 py-1 rounded-full">
                     {draftContent.length}/{BRAND.maxPostLength}
@@ -1189,19 +1892,30 @@ export default function EmousHomeApp() {
                 </div>
               </div>
 
-              {/* Select Hashtag Pill */}
+              {/* Dynamic Auto-Detect or Manual Override Pill Picker */}
               <div>
-                <label className="block text-xs font-extrabold uppercase text-neutral-400 mb-2">
-                  Pick a Feed Tag:
+                <label className="block text-[11px] font-extrabold uppercase text-neutral-400 mb-1.5">
+                  Category Mode (Auto-Detects from your words or pick one):
                 </label>
                 <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDraftTagMode('AUTO')}
+                    className={`text-xs font-display font-extrabold px-3 py-1 rounded-xl border-2 border-black ${
+                      draftTagMode === 'AUTO'
+                        ? 'bg-emous-lime text-black'
+                        : 'bg-black text-neutral-300'
+                    }`}
+                  >
+                    ⚡ Auto-Detect ({liveComposerClassification.primaryTag})
+                  </button>
                   {POPULAR_TAGS.map((t) => (
                     <button
                       type="button"
                       key={t}
-                      onClick={() => setDraftTag(t)}
-                      className={`text-xs font-display font-extrabold px-3 py-1.5 rounded-xl border-2 border-black ${
-                        draftTag === t
+                      onClick={() => setDraftTagMode(t)}
+                      className={`text-xs font-display font-extrabold px-2.5 py-1 rounded-xl border-2 border-black ${
+                        draftTagMode === t
                           ? 'bg-emous-pink text-white'
                           : 'bg-black text-neutral-300'
                       }`}
@@ -1215,7 +1929,7 @@ export default function EmousHomeApp() {
               <button
                 type="submit"
                 disabled={isPublishing || !draftContent.trim()}
-                className="w-full bg-emous-lime text-black font-display font-extrabold text-lg py-3.5 rounded-2xl flyer-btn uppercase disabled:opacity-50"
+                className="w-full bg-emous-lime text-black font-display font-extrabold text-base py-3.5 rounded-2xl flyer-btn uppercase disabled:opacity-50"
               >
                 {isPublishing ? 'Posting...' : 'Drop Anonymous Card 🚀'}
               </button>
@@ -1225,25 +1939,102 @@ export default function EmousHomeApp() {
       )}
 
       {/* =====================================================================
-          SCREEN 4: 9:16 INSTAGRAM / SNAPCHAT STORY SHARE GENERATOR
+          MODAL 2: WOW FEATURE #2 — ANONYMOUS WHISPER COMMENTS THREAD
+         ===================================================================== */}
+      {activeCommentPost && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-emous-surface w-full max-w-lg rounded-3xl p-5 flyer-card space-y-4 my-auto">
+            <div className="flex items-center justify-between">
+              <span className="bg-emous-yellow text-black font-display font-extrabold text-xs uppercase px-3 py-1 rounded-full border-2 border-black">
+                💬 ANONYMOUS WHISPER THREAD ({activeCommentPost.tag})
+              </span>
+              <button
+                onClick={() => setActiveCommentPost(null)}
+                className="bg-black text-white p-1.5 rounded-xl border-2 border-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-black/75 rounded-2xl p-3.5 border-2 border-black">
+              <p className="text-xs font-extrabold text-emous-lime mb-1">
+                🎭 @{activeCommentPost.authorHandle} (OP)
+              </p>
+              <p className="font-sans font-bold text-sm text-white">
+                “{activeCommentPost.content}”
+              </p>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(!activeCommentPost.comments ||
+                activeCommentPost.comments.length === 0) && (
+                <p className="text-xs text-neutral-400 text-center py-4">
+                  No whisper replies yet. Drop the first anonymous reply!
+                </p>
+              )}
+              {(activeCommentPost.comments || []).map((c) => (
+                <div
+                  key={c._id}
+                  className="bg-black/60 rounded-xl p-3 border border-white/15 flex items-start justify-between gap-2"
+                >
+                  <div>
+                    <span className="text-[11px] font-extrabold text-emous-yellow">
+                      🎭 @{c.authorHandle}{' '}
+                      {c.isOp && (
+                        <span className="bg-emous-pink text-white text-[9px] px-1.5 py-0.2 rounded-full ml-1">
+                          👑 OP
+                        </span>
+                      )}
+                    </span>
+                    <p className="text-xs sm:text-sm font-bold text-white mt-0.5">
+                      {c.text}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-bold shrink-0">
+                    {formatRelativeTime(c.createdAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleAddWhisperComment} className="flex gap-2">
+              <input
+                type="text"
+                maxLength={180}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Whisper an anonymous reply..."
+                className="flex-1 bg-black text-white rounded-xl px-3.5 py-2.5 border-2 border-white/25 text-xs sm:text-sm font-bold focus:outline-none focus:border-emous-lime"
+              />
+              <button
+                type="submit"
+                className="bg-emous-lime text-black font-display font-extrabold text-xs px-4 py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center gap-1"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Reply</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          SCREEN 4: 9:16 STORY GENERATOR + WOW FEATURE #1 (DROP Q&A TO PUBLIC FEED)
          ===================================================================== */}
       {activeStoryMsg && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 overflow-y-auto">
           <div className="bg-emous-surface w-full max-w-3xl rounded-3xl p-5 sm:p-6 flyer-card grid grid-cols-1 md:grid-cols-2 gap-6 items-center my-auto">
-            {/* Left Column: Perfectly Proportioned 9:16 Vertical Story Card Preview */}
             <div className="flex justify-center">
               <div
                 style={{ backgroundColor: activeStoryTheme.canvasBg }}
-                className="w-[270px] h-[480px] rounded-3xl p-4 flyer-card flex flex-col justify-between relative overflow-hidden select-none"
+                className="w-[250px] h-[444px] rounded-3xl p-4 flyer-card flex flex-col justify-between relative overflow-hidden select-none"
               >
-                {/* Header Badge */}
                 <div className="text-center">
                   <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase px-3 py-1 rounded-md border-2 border-black shadow-brutal">
                     ASK @{currentHandle}
                   </span>
                 </div>
 
-                {/* Top Card: Vibrant Question Box */}
                 <div
                   style={{
                     backgroundColor: activeStoryTheme.topCardBg,
@@ -1254,12 +2045,11 @@ export default function EmousHomeApp() {
                   <span className="inline-block bg-black text-emous-lime text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
                     🤫 ANONYMOUS CONFESSION
                   </span>
-                  <p className="font-sans font-extrabold text-sm leading-snug line-clamp-4">
+                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-4">
                     “{activeStoryMsg.question}”
                   </p>
                 </div>
 
-                {/* Bottom Card: Contrasting Response Box */}
                 <div
                   style={{
                     backgroundColor: activeStoryTheme.bottomCardBg,
@@ -1270,29 +2060,27 @@ export default function EmousHomeApp() {
                   <span className="inline-block bg-black text-emous-yellow text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
                     ⚡ @{currentHandle} REPLIED
                   </span>
-                  <p className="font-sans font-extrabold text-sm leading-snug line-clamp-4">
+                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-4">
                     {replyText.trim() || 'Type your reply on the right... 👀'}
                   </p>
                 </div>
 
-                {/* Subtle but Clear Watermark at Bottom */}
                 <div className="text-center">
                   <span className="inline-block bg-emous-pink text-white font-display font-extrabold text-[10px] px-3 py-1 rounded-full border-2 border-black">
-                    emous.app/ask/{currentHandle}
+                    {BRAND.domain}/ask/{currentHandle}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Controls, Color Combos & 1-Tap PNG Download */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-extrabold uppercase text-emous-lime">
-                    9:16 STORY GENERATOR
+                    9:16 STORY & PUBLIC FEED GENERATOR
                   </span>
-                  <h3 className="font-display font-extrabold text-2xl">
-                    Reply & Share to Story
+                  <h3 className="font-display font-extrabold text-xl sm:text-2xl">
+                    Reply & Share Confession
                   </h3>
                 </div>
                 <button
@@ -1314,7 +2102,7 @@ export default function EmousHomeApp() {
                   }
                   rows={3}
                   placeholder="Type your response for the bottom card..."
-                  className="w-full bg-black text-white rounded-2xl p-3.5 border-2 border-white/25 font-sans font-bold text-base focus:outline-none focus:border-emous-lime resize-none"
+                  className="w-full bg-black text-white rounded-2xl p-3.5 border-2 border-white/25 font-sans font-bold text-sm sm:text-base focus:outline-none focus:border-emous-lime resize-none"
                 />
               </div>
 
@@ -1340,22 +2128,33 @@ export default function EmousHomeApp() {
                 </div>
               </div>
 
-              <div className="pt-2 space-y-2.5">
+              <div className="pt-1 space-y-2">
                 <button
                   type="button"
                   disabled={isSavingReply}
                   onClick={() => handleSaveReplyAndShare(true)}
-                  className="w-full bg-emous-pink text-white font-display font-extrabold text-base py-3.5 px-5 rounded-2xl flyer-btn uppercase flex items-center justify-center gap-2"
+                  className="w-full bg-emous-pink text-white font-display font-extrabold text-sm py-3 px-5 rounded-2xl flyer-btn uppercase flex items-center justify-center gap-2"
                 >
-                  <Download className="w-5 h-5" />
+                  <Download className="w-4 h-4" />
                   <span>Download 9:16 Story Image (PNG)</span>
+                </button>
+
+                {/* Wow Feature #1: Publish Q&A directly to the Public Visual Feed */}
+                <button
+                  type="button"
+                  disabled={isSavingReply}
+                  onClick={handleDropQaToPublicFeed}
+                  className="w-full bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm py-3 px-5 rounded-2xl flyer-btn uppercase flex items-center justify-center gap-2"
+                >
+                  <Flame className="w-4 h-4" />
+                  <span>Publish Q&A to Public Feed 🔥</span>
                 </button>
 
                 <button
                   type="button"
                   disabled={isSavingReply}
                   onClick={() => handleSaveReplyAndShare(false)}
-                  className="w-full bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 px-4 rounded-xl flyer-btn uppercase"
+                  className="w-full bg-emous-lime text-black font-display font-extrabold text-xs py-2 px-4 rounded-xl flyer-btn uppercase"
                 >
                   Save Reply Only
                 </button>

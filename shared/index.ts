@@ -218,14 +218,390 @@ export const STORY_COLOR_PAIRS = [
 ] as const;
 
 export const POPULAR_TAGS = [
-  '#WorkConfessions',
-  '#CampusTea',
+  '#Work',
+  '#SexAndDating',
+  '#Crypto',
+  '#Gym',
+  '#Politics',
+  '#Religion',
+  '#Campus',
   '#NightOut',
-  '#CrushAlert',
-  '#UnpopularOpinion',
-  '#LateNightThoughts',
-  '#Streetalk',
 ] as const;
+
+export const TOPIC_DICTIONARIES: Record<string, readonly string[]> = {
+  '#Work': [
+    'work',
+    'office',
+    'boss',
+    'coworker',
+    'colleague',
+    'hr',
+    'salary',
+    'job',
+    'meeting',
+    'standup',
+    'client',
+    'career',
+    'promotion',
+    'paycheck',
+    'remote',
+    'intern',
+    'manager',
+    'corporate',
+    '9-5',
+    'shift',
+    'resign',
+    'fired',
+  ],
+  '#SexAndDating': [
+    'sex',
+    'hookup',
+    'crush',
+    'dating',
+    'date',
+    'ex',
+    'boyfriend',
+    'girlfriend',
+    'situationship',
+    'kiss',
+    'bed',
+    'tinder',
+    'hinge',
+    'bumble',
+    'sneaky',
+    'partner',
+    'cheating',
+    'cheat',
+    'virgin',
+    'intimate',
+    'bedroom',
+    'flirt',
+    'attraction',
+    'love',
+  ],
+  '#Crypto': [
+    'crypto',
+    'bitcoin',
+    'btc',
+    'eth',
+    'ethereum',
+    'solana',
+    'sol',
+    'memecoin',
+    'token',
+    'wallet',
+    'binance',
+    'coinbase',
+    'web3',
+    'nft',
+    'airdrop',
+    'degen',
+    'bull',
+    'bear',
+    'blockchain',
+    'hodl',
+    'portfolio',
+    'pump',
+  ],
+  '#Gym': [
+    'gym',
+    'workout',
+    'protein',
+    'creatine',
+    'cardio',
+    'legday',
+    'bench',
+    'squat',
+    'deadlift',
+    'fitness',
+    'gains',
+    'muscle',
+    'trainer',
+    'treadmill',
+    'weights',
+    'bulk',
+    'cut',
+    'physique',
+  ],
+  '#Politics': [
+    'politics',
+    'political',
+    'president',
+    'election',
+    'vote',
+    'voting',
+    'government',
+    'govt',
+    'senate',
+    'congress',
+    'minister',
+    'governor',
+    'mayor',
+    'policy',
+    'tax',
+    'taxes',
+    'democracy',
+    'campaign',
+    'parliament',
+  ],
+  '#Religion': [
+    'religion',
+    'religious',
+    'church',
+    'mosque',
+    'temple',
+    'pray',
+    'prayer',
+    'god',
+    'allah',
+    'jesus',
+    'faith',
+    'pastor',
+    'imam',
+    'priest',
+    'bible',
+    'quran',
+    'sermon',
+    'sin',
+    'blessed',
+    'spiritual',
+    'worship',
+    'sunday',
+    'friday',
+  ],
+  '#Campus': [
+    'campus',
+    'college',
+    'university',
+    'uni',
+    'lecturer',
+    'professor',
+    'exam',
+    'exams',
+    'hostel',
+    'dorm',
+    'semester',
+    'gpa',
+    'student',
+    'class',
+    'lecture',
+    'assignment',
+    'thesis',
+    'project',
+    'library',
+    'freshman',
+    'final',
+  ],
+  '#NightOut': [
+    'nightout',
+    'club',
+    'party',
+    'rave',
+    'warehouse',
+    'drinks',
+    'drunk',
+    'bar',
+    'rooftop',
+    'dj',
+    'tequila',
+    'margaritas',
+    'tacos',
+    'hangover',
+    '2am',
+    '3am',
+    '4am',
+    'diner',
+    'fries',
+    'vip',
+    'bouncer',
+    'festival',
+    'concert',
+  ],
+};
+
+const STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'that',
+  'this',
+  'with',
+  'you',
+  'not',
+  'are',
+  'from',
+  'your',
+  'all',
+  'have',
+  'had',
+  'has',
+  'was',
+  'were',
+  'will',
+  'would',
+  'could',
+  'should',
+  'they',
+  'them',
+  'their',
+  'what',
+  'when',
+  'where',
+  'who',
+  'whom',
+  'why',
+  'how',
+  'but',
+  'out',
+  'about',
+  'into',
+  'just',
+  'like',
+  'really',
+  'still',
+  'even',
+  'back',
+  'only',
+  'know',
+  'none',
+  'our',
+  'actually',
+  'already',
+  'literally',
+  'someone',
+  'anyone',
+  'everyone',
+  'been',
+  'being',
+  'over',
+  'under',
+  'more',
+  'than',
+  'then',
+  'some',
+  'such',
+  'very',
+  'much',
+  'many',
+  'any',
+  'every',
+  'can',
+  'cannot',
+  'dont',
+  'didnt',
+  'wasnt',
+  'arent',
+  'isnt',
+  'ive',
+  'im',
+]);
+
+/**
+ * Dynamically categorizes a confession post based on:
+ * 1. Explicit #hashtag inside the text (or user-provided custom tag)
+ * 2. NLP keyword matching against TOPIC_DICTIONARIES (#Work, #SexAndDating, #Crypto, #Gym, #Politics, #Religion, #Campus, #NightOut)
+ * 3. Extracts clean keywords/phrases for the Trending Radar tab.
+ */
+export function classifyPostTopics(
+  content: string,
+  explicitTagInput?: string
+): {
+  primaryTag: string;
+  matchedCategories: string[];
+  keywords: string[];
+} {
+  const textLower = (content || '').toLowerCase();
+
+  // 1. Extract explicit #hashtags written directly inside the post content
+  const inlineHashtags: string[] = [];
+  const hashRegex = /#([a-zA-Z0-9_]{2,28})/g;
+  let match: RegExpExecArray | null;
+  while ((match = hashRegex.exec(content)) !== null) {
+    const formatted = `#${match[1].charAt(0).toUpperCase()}${match[1].slice(1)}`;
+    if (!inlineHashtags.includes(formatted)) {
+      inlineHashtags.push(formatted);
+    }
+  }
+
+  // 2. Score content against TOPIC_DICTIONARIES
+  const categoryScores: { tag: string; score: number }[] = [];
+  const detectedKeywords = new Set<string>();
+
+  for (const [categoryTag, wordList] of Object.entries(TOPIC_DICTIONARIES)) {
+    let score = 0;
+    for (const kw of wordList) {
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const kwRegex = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (kwRegex.test(textLower)) {
+        score += 2;
+        detectedKeywords.add(kw.toLowerCase());
+      }
+    }
+    if (score > 0) {
+      categoryScores.push({ tag: categoryTag, score });
+    }
+  }
+
+  categoryScores.sort((a, b) => b.score - a.score);
+  const matchedCategories = categoryScores.map((c) => c.tag);
+
+  // 3. Also extract notable 4+ letter words for Trending Phrases
+  const rawWords = textLower
+    .replace(/#[a-z0-9_]+/g, ' ')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
+
+  for (const w of rawWords.slice(0, 12)) {
+    detectedKeywords.add(w);
+  }
+
+  // 4. Determine primaryTag:
+  //    - If the user wrote an inline #hashtag in their post, prioritize it
+  //    - Otherwise if NLP matched a topic (#Work, #SexAndDating, #Crypto, etc.) and the user left the tag on 'Auto' or default, use the NLP topic!
+  //    - Otherwise use the user's explicit tag or fallback to '#Confessions'
+  let cleanExplicit = (explicitTagInput || '').trim().replace(/\s+/g, '');
+  if (
+    cleanExplicit &&
+    cleanExplicit.toLowerCase() !== 'auto' &&
+    cleanExplicit.toLowerCase() !== '#auto'
+  ) {
+    cleanExplicit = cleanExplicit.startsWith('#')
+      ? cleanExplicit
+      : `#${cleanExplicit}`;
+  } else {
+    cleanExplicit = '';
+  }
+
+  // Map legacy tags to dynamic categories if needed
+  const legacyMap: Record<string, string> = {
+    '#workconfessions': '#Work',
+    '#campustea': '#Campus',
+    '#crushalert': '#SexAndDating',
+  };
+  if (cleanExplicit && legacyMap[cleanExplicit.toLowerCase()]) {
+    cleanExplicit = legacyMap[cleanExplicit.toLowerCase()];
+  }
+
+  let primaryTag = '#Confessions';
+  if (inlineHashtags.length > 0) {
+    primaryTag = inlineHashtags[0];
+  } else if (matchedCategories.length > 0) {
+    primaryTag = matchedCategories[0];
+  } else if (cleanExplicit) {
+    primaryTag = cleanExplicit;
+  }
+
+  const allCategories = Array.from(
+    new Set([primaryTag, ...inlineHashtags, ...matchedCategories])
+  );
+
+  return {
+    primaryTag,
+    matchedCategories: allCategories,
+    keywords: Array.from(detectedKeywords),
+  };
+}
 
 export const HANDLE_ADJECTIVES = [
   'Golden',
@@ -319,11 +695,35 @@ export interface UserIdentityDTO {
   createdAt: string;
 }
 
+export interface PostCommentDTO {
+  _id: string;
+  authorHandle: string;
+  text: string;
+  isOp?: boolean;
+  createdAt: string;
+}
+
+export interface TrendingTagItem {
+  tag: string;
+  count: number;
+  reactionsCount: number;
+  score: number;
+}
+
+export interface TrendingPhraseItem {
+  phrase: string;
+  category?: string;
+  count: number;
+  score: number;
+}
+
 export interface PostDTO {
   _id: string;
   authorHandle: string;
   content: string;
   tag: string;
+  categories?: string[];
+  keywords?: string[];
   background: CardBackground;
   location?: {
     type: 'Point';
@@ -333,6 +733,8 @@ export interface PostDTO {
   distanceMiles?: number;
   reactions: ReactionCounts;
   myReactions: ReactionType[];
+  comments?: PostCommentDTO[];
+  commentsCount?: number;
   flagsCount: number;
   isFlaggedByMe?: boolean;
   isHidden: boolean;
@@ -347,6 +749,8 @@ export interface InboxMessageDTO {
   repliedAt?: string;
   themeId: string;
   isRead: boolean;
+  burnAfterReading?: boolean;
+  senderHint?: string;
   flagsCount: number;
   isHidden: boolean;
   createdAt: string;

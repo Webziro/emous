@@ -60,7 +60,7 @@ async function runVerification() {
       `✅ 3. 🎲 Card Shuffler returned: ${shuffleData.background.name} (${shuffleData.background.type})`
     );
 
-    // 4. Create Visual Post with GPS coordinates + Global & Near Me ($near 5-mile radius)
+    // 4. Create Visual Post with GPS coordinates + Dynamic NLP Topic Categorization
     const createPostRes = await fetch(`${baseUrl}/posts`, {
       method: 'POST',
       headers: {
@@ -68,8 +68,8 @@ async function runVerification() {
         'x-device-id': 'test-fingerprint-001',
       },
       body: JSON.stringify({
-        content: 'Testing hyperlocal 5-mile confession from downtown! 🔥',
-        tag: '#WorkConfessions',
+        content:
+          'My boss at the office made us stay late for a 5PM standup meeting! 🔥',
         lat: 40.7128,
         lng: -74.006,
       }),
@@ -77,9 +77,17 @@ async function runVerification() {
     const createdPostData = await createPostRes.json();
     const createdPostId = createdPostData.post._id;
     assert.ok(createdPostId);
+    assert.strictEqual(
+      createdPostData.post.tag,
+      '#Work',
+      'NLP engine must auto-categorize office/boss/meeting post under #Work'
+    );
+    console.log(
+      `✅ 4a. Phase 5 Dynamic NLP Categorization auto-tagged office post as ${createdPostData.post.tag} (keywords: ${createdPostData.post.keywords.join(', ')})`
+    );
 
-    // 4b. Phase 4: Emoji Reactions Toggle (🔥 fire)
-    const reactRes = await fetch(`${baseUrl}/posts/${createdPostId}/react`, {
+    // 4b. Phase 5: Exclusive Single Reaction Per User Per Post
+    const reactRes1 = await fetch(`${baseUrl}/posts/${createdPostId}/react`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -87,10 +95,44 @@ async function runVerification() {
       },
       body: JSON.stringify({ type: 'fire' }),
     });
-    const reactData = await reactRes.json();
-    assert.strictEqual(reactData.reactions.fire, 1);
-    assert.ok(reactData.myReactions.includes('fire'));
-    console.log('✅ 4b. Phase 4 Emoji Reactions (🔥, 💀, 👀, ❤️) verified.');
+    const reactData1 = await reactRes1.json();
+    assert.strictEqual(reactData1.reactions.fire, 1);
+    assert.deepStrictEqual(reactData1.myReactions, ['fire']);
+
+    // Now click 'skull' on the SAME post with the SAME user -> must remove 'fire' (0) and set 'skull' (1)
+    const reactRes2 = await fetch(`${baseUrl}/posts/${createdPostId}/react`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': 'test-fingerprint-001',
+      },
+      body: JSON.stringify({ type: 'skull' }),
+    });
+    const reactData2 = await reactRes2.json();
+    assert.strictEqual(
+      reactData2.reactions.fire,
+      0,
+      'Previous fire reaction must be removed when user switches to skull'
+    );
+    assert.strictEqual(reactData2.reactions.skull, 1);
+    assert.deepStrictEqual(reactData2.myReactions, ['skull']);
+    console.log(
+      '✅ 4b. Phase 5 Exclusive Single Reaction (1 user = max 1 reaction per post) verified.'
+    );
+
+    // 4bb. Phase 5: Trending Radar Endpoint (Dynamic Tags & Frequent Phrases)
+    const trendRes = await fetch(`${baseUrl}/posts/trending?period=all`);
+    const trendData = await trendRes.json();
+    assert.ok(
+      Array.isArray(trendData.trendingTags) && trendData.trendingTags.length > 0
+    );
+    assert.ok(
+      Array.isArray(trendData.trendingPhrases) &&
+        trendData.trendingPhrases.length > 0
+    );
+    console.log(
+      `✅ 4bb. Phase 5 Trending Radar returned ${trendData.trendingTags.length} dynamic categories & ${trendData.trendingPhrases.length} hot phrases.`
+    );
 
     // 4c. Phase 4: Safety Shield & Doxxing/Profanity Filter
     const doxRes = await fetch(`${baseUrl}/posts`, {

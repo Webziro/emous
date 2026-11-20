@@ -51,12 +51,77 @@
   ],
   "posts": [
     {
+      "_id": "c603bce6bd984bb5a98f65f9",
+      "authorDeviceId": "test-fingerprint-001",
+      "authorHandle": "CrimsonComet",
+      "content": "My boss at the office made us stay late for a 5PM standup meeting! 🔥",
+      "tag": "#Work",
+      "tagLower": "#work",
+      "categories": [
+        "#Work"
+      ],
+      "keywords": [
+        "office",
+        "boss",
+        "meeting",
+        "standup",
+        "made",
+        "stay",
+        "late"
+      ],
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "reactions": {
+        "fire": 0,
+        "skull": 1,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [
+          "test-fingerprint-001"
+        ],
+        "eyes": [],
+        "heart": []
+      },
+      "comments": [],
+      "flagsCount": 3,
+      "flaggedBy": [
+        "flagger-user-1",
+        "flagger-user-2",
+        "flagger-user-3"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-11-20T10:48:29.544Z",
+      "updatedAt": "2026-11-20T10:48:29.660Z"
+    },
+    {
       "_id": "48ca85529cb74721aaef4f62",
       "authorDeviceId": "test-fingerprint-001",
       "authorHandle": "CrimsonComet",
       "content": "Testing hyperlocal 5-mile confession from downtown! 🔥",
-      "tag": "#WorkConfessions",
-      "tagLower": "#workconfessions",
+      "tag": "#Work",
+      "tagLower": "#work",
       "background": {
         "id": "grad-neon-riot",
         "type": "gradient",
@@ -100,15 +165,26 @@
       ],
       "isHidden": true,
       "createdAt": "2026-11-19T06:32:11.628Z",
-      "updatedAt": "2026-11-19T06:32:11.751Z"
+      "updatedAt": "2026-11-19T06:32:11.751Z",
+      "categories": [
+        "#Work"
+      ],
+      "keywords": [
+        "testing",
+        "hyperlocal",
+        "5-mile",
+        "confession",
+        "downtown"
+      ],
+      "comments": []
     },
     {
       "_id": "67cba7cb7ab04c768c0d68f8",
       "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
       "authorHandle": "GoldenWizard",
       "content": "I am the most lite student in the campus, but you all are'nt ready for this conversation",
-      "tag": "#CampusTea",
-      "tagLower": "#campustea",
+      "tag": "#Campus",
+      "tagLower": "#campus",
       "background": {
         "id": "grad-neon-riot",
         "type": "gradient",
@@ -144,7 +220,19 @@
         "heart": [
           "web-3pbdu13r-mwbqrp0x"
         ]
-      }
+      },
+      "categories": [
+        "#Campus"
+      ],
+      "keywords": [
+        "campus",
+        "student",
+        "most",
+        "lite",
+        "ready",
+        "conversation"
+      ],
+      "comments": []
     },
     {
       "_id": "83f7f9fb615747609dc0f9d1",
@@ -186,14 +274,25 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#UnpopularOpinion"
+      ],
+      "keywords": [
+        "women",
+        "find",
+        "things",
+        "easier",
+        "advantage"
+      ],
+      "comments": []
     },
     {
       "_id": "c947ebb724eb467c82137cc1",
       "authorDeviceId": "web-3pbdu13r-mwbqrp0x",
       "authorHandle": "GoldenWizard",
       "content": "I have a confession to make. HR is so beautiful; anytime she speaks i rearly pay  #workconfessions",
-      "tag": "#WorkConfessions",
+      "tag": "#Workconfessions",
       "tagLower": "#workconfessions",
       "background": {
         "id": "grad-neon-riot",
@@ -230,15 +329,29 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#Workconfessions",
+        "#Work"
+      ],
+      "keywords": [
+        "hr",
+        "confession",
+        "make",
+        "beautiful",
+        "anytime",
+        "speaks",
+        "rearly"
+      ],
+      "comments": []
     },
     {
       "_id": "c5f6927981b448caa7622321",
       "authorDeviceId": "test-fingerprint-001",
       "authorHandle": "CrimsonComet",
       "content": "Testing hyperlocal 5-mile confession from downtown! 🔥",
-      "tag": "#WorkConfessions",
-      "tagLower": "#workconfessions",
+      "tag": "#Work",
+      "tagLower": "#work",
       "background": {
         "id": "grad-neon-riot",
         "type": "gradient",
@@ -280,15 +393,26 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#Work"
+      ],
+      "keywords": [
+        "testing",
+        "hyperlocal",
+        "5-mile",
+        "confession",
+        "downtown"
+      ],
+      "comments": []
     },
     {
       "_id": "7483d1131dc3431b9cbb89d0",
       "authorDeviceId": "demo-device-goldenwizard",
       "authorHandle": "GoldenWizard",
       "content": "Told my boss my Wi-Fi crashed during the 4PM standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫",
-      "tag": "#WorkConfessions",
-      "tagLower": "#workconfessions",
+      "tag": "#NightOut",
+      "tagLower": "#nightout",
       "background": {
         "id": "grad-neon-riot",
         "type": "gradient",
@@ -326,7 +450,24 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#NightOut",
+        "#Work"
+      ],
+      "keywords": [
+        "boss",
+        "standup",
+        "rooftop",
+        "margaritas",
+        "tacos",
+        "told",
+        "wi-fi",
+        "crashed",
+        "during",
+        "line"
+      ],
+      "comments": []
     },
     {
       "_id": "46f3d88524624eb8bede4a26",
@@ -373,15 +514,34 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#NightOut"
+      ],
+      "keywords": [
+        "warehouse",
+        "2am",
+        "whoever",
+        "wearing",
+        "vintage",
+        "neon",
+        "green",
+        "puffer",
+        "last",
+        "night",
+        "locked",
+        "eyes",
+        "times"
+      ],
+      "comments": []
     },
     {
       "_id": "df8083313ba241688ab3eae8",
       "authorDeviceId": "demo-device-acidrebel",
       "authorHandle": "AcidRebel",
       "content": "Unpopular opinion: 3AM diner fries with the squad hit 100x harder than any $200 reservation spot in the city.",
-      "tag": "#UnpopularOpinion",
-      "tagLower": "#unpopularopinion",
+      "tag": "#NightOut",
+      "tagLower": "#nightout",
       "background": {
         "id": "grad-acid-lime",
         "type": "gradient",
@@ -419,15 +579,32 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#NightOut"
+      ],
+      "keywords": [
+        "3am",
+        "diner",
+        "fries",
+        "unpopular",
+        "opinion",
+        "squad",
+        "100x",
+        "harder",
+        "reservation",
+        "spot",
+        "city"
+      ],
+      "comments": []
     },
     {
       "_id": "c08d2bf9181a4dad83c92726",
       "authorDeviceId": "demo-device-cyberviper",
       "authorHandle": "CyberViper",
       "content": "Our entire group project got an A+ and none of us know who actually wrote the final 6 slides on the Google Doc 💀",
-      "tag": "#CampusTea",
-      "tagLower": "#campustea",
+      "tag": "#Campus",
+      "tagLower": "#campus",
       "background": {
         "id": "img-neon-alley",
         "type": "image",
@@ -466,15 +643,28 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#Campus"
+      ],
+      "keywords": [
+        "project",
+        "final",
+        "entire",
+        "group",
+        "wrote",
+        "slides",
+        "google"
+      ],
+      "comments": []
     },
     {
       "_id": "97ec634ccec5418aaad158f8",
       "authorDeviceId": "demo-device-goldenwizard",
       "authorHandle": "GoldenWizard",
       "content": "I still have a playlist secretly named after someone I talked to for literally 2 weeks back in October.",
-      "tag": "#CrushAlert",
-      "tagLower": "#crushalert",
+      "tag": "#SexAndDating",
+      "tagLower": "#sexanddating",
       "background": {
         "id": "grad-midnight-rave",
         "type": "gradient",
@@ -512,10 +702,40 @@
         "skull": [],
         "eyes": [],
         "heart": []
-      }
+      },
+      "categories": [
+        "#SexAndDating"
+      ],
+      "keywords": [
+        "playlist",
+        "secretly",
+        "named",
+        "after",
+        "talked",
+        "weeks",
+        "october"
+      ],
+      "comments": []
     }
   ],
   "inbox": [
+    {
+      "_id": "91e428a2789749ba9c6cc288",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Who is your secret crush at the studio? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": true,
+      "burnAfterReading": false,
+      "senderHint": "💻 Sent from Web Browser • ☀️ Morning Confessor",
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-20T10:48:29.697Z",
+      "updatedAt": "2026-11-20T10:48:29.718Z",
+      "reply": "Never telling 🤫🔥",
+      "repliedAt": "2026-11-20T10:48:29.718Z"
+    },
     {
       "_id": "cde7424a4a004bb29a35b165",
       "recipientHandle": "GoldenWizard",

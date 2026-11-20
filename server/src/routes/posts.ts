@@ -12,11 +12,15 @@ import { createRateLimiter, inspectAndSanitizeText } from '../safety';
 import {
   ALL_BACKGROUNDS,
   BRAND,
+  classifyPostTopics,
   CURATED_GRADIENTS,
   POPULAR_TAGS,
   REACTION_TYPES,
   ReactionCounts,
   ReactionType,
+  TOPIC_DICTIONARIES,
+  TrendingPhraseItem,
+  TrendingTagItem,
 } from '../../../shared';
 
 export const postsRouter = Router();
@@ -24,7 +28,7 @@ export const postsRouter = Router();
 const postRateLimiter = createRateLimiter({
   action: 'confession card',
   maxRequests: 8,
-  windowMs: 60 * 1000, // Max 8 posts per minute per deviceId
+  windowMs: 60 * 1000,
 });
 
 export function haversineMiles(
@@ -41,12 +45,6 @@ export function haversineMiles(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function normalizeTag(rawTag?: string): string {
-  if (!rawTag || !rawTag.trim()) return '#Confessions';
-  const cleaned = rawTag.trim().replace(/\s+/g, '');
-  return cleaned.startsWith('#') ? cleaned : `#${cleaned}`;
 }
 
 function getReactionsPayload(
@@ -66,26 +64,178 @@ function getReactionsPayload(
         Array.isArray(doc.reactedBy[type]) &&
         doc.reactedBy[type].includes(callerDeviceId)
       ) {
+        // Enforce single reaction per user in response payload
         myReactions.push(type);
+        break;
       }
     }
   }
   return { reactions: counts, myReactions };
 }
 
+function computeTrendingFromPosts(
+  posts: any[],
+  period: string
+): {
+  trendingTags: TrendingTagItem[];
+  trendingPhrases: TrendingPhraseItem[];
+  dynamicTags: string[];
+} {
+  const now = Date.now();
+  let cutoffMs = 0;
+  if (period === '24h') cutoffMs = now - 24 * 60 * 60 * 1000;
+  else if (period === '7d') cutoffMs = now - 7 * 24 * 60 * 60 * 1000;
+
+  let filtered = posts.filter((p) => !p.isHidden);
+  if (cutoffMs > 0) {
+    const windowPosts = filtered.filter(
+      (p) => new Date(p.createdAt).getTime() >= cutoffMs
+    );
+    // Fallback to all posts if window has fewer than 2 posts in demo
+    if (windowPosts.length >= 2) {
+      filtered = windowPosts;
+    }
+  }
+
+  const tagMap = new Map<
+    string,
+    { tag: string; count: number; reactionsCount: number }
+  >();
+  const phraseMap = new Map<
+    string,
+    { phrase: string; category?: string; count: number; reactionsCount: number }
+  >();
+
+  // Map keywords back to their parent category badge if applicable
+  const keywordToCategory: Record<string, string> = {};
+  for (const [cat, words] of Object.entries(TOPIC_DICTIONARIES)) {
+    for (const w of words) {
+      keywordToCategory[w.toLowerCase()] = cat;
+    }
+  }
+
+  for (const post of filtered) {
+    const analyzed = classifyPostTopics(post.content || '', post.tag);
+    const categories =
+      Array.isArray(post.categories) && post.categories.length > 0
+        ? post.categories
+        : analyzed.matchedCategories;
+    const keywords =
+      Array.isArray(post.keywords) && post.keywords.length > 0
+        ? post.keywords
+        : analyzed.keywords;
+
+    const rxTotal =
+      (post.reactions?.fire || 0) +
+      (post.reactions?.skull || 0) +
+      (post.reactions?.eyes || 0) +
+      (post.reactions?.heart || 0);
+
+    for (const rawCat of categories) {
+      const key = rawCat.toLowerCase();
+      const existing = tagMap.get(key) || {
+        tag: rawCat,
+        count: 0,
+        reactionsCount: 0,
+      };
+      existing.count += 1;
+      existing.reactionsCount += rxTotal;
+      tagMap.set(key, existing);
+    }
+
+    for (const kw of keywords) {
+      const cleanKw = kw.toLowerCase().trim();
+      if (cleanKw.length < 2) continue;
+      const existing = phraseMap.get(cleanKw) || {
+        phrase: cleanKw,
+        category: keywordToCategory[cleanKw] || analyzed.primaryTag,
+        count: 0,
+        reactionsCount: 0,
+      };
+      existing.count += 1;
+      existing.reactionsCount += rxTotal;
+      phraseMap.set(cleanKw, existing);
+    }
+  }
+
+  const trendingTags: TrendingTagItem[] = Array.from(tagMap.values())
+    .map((item) => ({
+      tag: item.tag,
+      count: item.count,
+      reactionsCount: item.reactionsCount,
+      score: item.count * 10 + item.reactionsCount,
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const trendingPhrases: TrendingPhraseItem[] = Array.from(phraseMap.values())
+    .map((item) => ({
+      phrase: item.phrase,
+      category: item.category,
+      count: item.count,
+      score: item.count * 10 + item.reactionsCount,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 24);
+
+  // Merge active dynamic tags with baseline topic tags so the scrolling bar is always rich
+  const dynamicTagSet = new Set<string>();
+  for (const t of trendingTags) {
+    dynamicTagSet.add(t.tag);
+  }
+  for (const base of POPULAR_TAGS) {
+    dynamicTagSet.add(base);
+  }
+
+  return {
+    trendingTags,
+    trendingPhrases,
+    dynamicTags: Array.from(dynamicTagSet),
+  };
+}
+
+/**
+ * GET /api/v1/posts/trending
+ * Dedicated Trending Radar endpoint returning top dynamic hashtags and frequently used phrases ("work", "office", "crypto", "sex", "gym", "politics", "religion", etc.)
+ */
+postsRouter.get('/trending', async (req: Request, res: Response) => {
+  try {
+    const period = (req.query.period as string) || 'all';
+    if (isUsingMongo()) {
+      const allPosts = await PostModel.find({ isHidden: false })
+        .sort({ createdAt: -1 })
+        .limit(250)
+        .lean();
+      const stats = computeTrendingFromPosts(allPosts, period);
+      return res.json({ period, ...stats });
+    }
+
+    reloadLocalStoreFromDiskIfNeeded();
+    const stats = computeTrendingFromPosts(localStore.posts, period);
+    return res.json({ period, ...stats });
+  } catch (err) {
+    console.error('Error in GET /posts/trending:', err);
+    return res.status(500).json({ error: 'Failed to compute trending topics.' });
+  }
+});
+
 /**
  * GET /api/v1/posts
+ * Supports:
+ * - mode=global | near
+ * - ?tag=#Work (matches primaryTag OR any NLP-inferred category in post.categories!)
+ * - ?phrase=office (matches post.keywords or post.content text search!)
  */
 postsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const mode = (req.query.mode as string) || 'global';
     const tagFilter = (req.query.tag as string)?.trim();
+    const phraseFilter = (req.query.phrase as string)?.trim().toLowerCase();
     const callerDeviceId = (req.headers['x-device-id'] as string) || '';
     const limit = Math.min(Number(req.query.limit) || 40, 100);
 
     const normalizedTagFilter =
       tagFilter && tagFilter.toLowerCase() !== 'all'
-        ? normalizeTag(tagFilter).toLowerCase()
+        ? (tagFilter.startsWith('#') ? tagFilter : `#${tagFilter}`).toLowerCase()
         : null;
 
     const lat = parseFloat(req.query.lat as string);
@@ -96,9 +246,6 @@ postsRouter.get('/', async (req: Request, res: Response) => {
 
     if (isUsingMongo()) {
       const filter: Record<string, any> = { isHidden: false };
-      if (normalizedTagFilter) {
-        filter.tagLower = normalizedTagFilter;
-      }
 
       if (mode === 'near' && hasCoords) {
         filter.location = {
@@ -112,13 +259,47 @@ postsRouter.get('/', async (req: Request, res: Response) => {
         };
       }
 
-      const query = PostModel.find(filter).limit(limit);
+      const query = PostModel.find(filter).limit(120);
       if (!filter.location) {
         query.sort({ createdAt: -1 });
       }
-      const posts = await query.lean();
+      const rawPosts = await query.lean();
+      const trendingSummary = computeTrendingFromPosts(rawPosts, 'all');
 
-      const formatted = posts.map((post) => {
+      const filteredPosts = rawPosts.filter((post) => {
+        const analyzed = classifyPostTopics(post.content || '', post.tag);
+        const cats = (
+          Array.isArray(post.categories) && post.categories.length > 0
+            ? post.categories
+            : analyzed.matchedCategories
+        ).map((c) => c.toLowerCase());
+
+        if (normalizedTagFilter) {
+          if (
+            post.tagLower !== normalizedTagFilter &&
+            !cats.includes(normalizedTagFilter)
+          ) {
+            return false;
+          }
+        }
+
+        if (phraseFilter) {
+          const kws = (
+            Array.isArray(post.keywords) && post.keywords.length > 0
+              ? post.keywords
+              : analyzed.keywords
+          ).map((k) => k.toLowerCase());
+          const inText = (post.content || '')
+            .toLowerCase()
+            .includes(phraseFilter);
+          if (!inText && !kws.includes(phraseFilter)) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      const formatted = filteredPosts.slice(0, limit).map((post) => {
         let distanceMiles: number | undefined;
         if (hasCoords && post.location?.coordinates?.length === 2) {
           const [postLng, postLat] = post.location.coordinates;
@@ -126,20 +307,32 @@ postsRouter.get('/', async (req: Request, res: Response) => {
             haversineMiles(lat, lng, postLat, postLng).toFixed(1)
           );
         }
+        const analyzed = classifyPostTopics(post.content || '', post.tag);
         const { reactions, myReactions } = getReactionsPayload(
           post,
           callerDeviceId
         );
+        const comments = Array.isArray(post.comments) ? post.comments : [];
         return {
           _id: String(post._id),
           authorHandle: post.authorHandle,
           content: post.content,
-          tag: post.tag,
+          tag: analyzed.primaryTag,
+          categories:
+            Array.isArray(post.categories) && post.categories.length > 0
+              ? post.categories
+              : analyzed.matchedCategories,
+          keywords:
+            Array.isArray(post.keywords) && post.keywords.length > 0
+              ? post.keywords
+              : analyzed.keywords,
           background: post.background,
           location: post.location,
           distanceMiles,
           reactions,
           myReactions,
+          comments,
+          commentsCount: comments.length,
           flagsCount: post.flagsCount,
           isFlaggedByMe: callerDeviceId
             ? post.flaggedBy?.includes(callerDeviceId)
@@ -149,15 +342,52 @@ postsRouter.get('/', async (req: Request, res: Response) => {
         };
       });
 
-      return res.json({ mode, posts: formatted, popularTags: POPULAR_TAGS });
+      return res.json({
+        mode,
+        posts: formatted,
+        popularTags: trendingSummary.dynamicTags,
+        trendingTags: trendingSummary.trendingTags,
+        trendingPhrases: trendingSummary.trendingPhrases,
+      });
     }
 
     // Local Store Engine
     reloadLocalStoreFromDiskIfNeeded();
-    let list = localStore.posts.filter((p) => !p.isHidden);
-    if (normalizedTagFilter) {
-      list = list.filter((p) => p.tagLower === normalizedTagFilter);
-    }
+    const activeLocalPosts = localStore.posts.filter((p) => !p.isHidden);
+    const trendingSummary = computeTrendingFromPosts(activeLocalPosts, 'all');
+
+    let list = activeLocalPosts.filter((post) => {
+      const analyzed = classifyPostTopics(post.content || '', post.tag);
+      const cats = (
+        Array.isArray(post.categories) && post.categories.length > 0
+          ? post.categories
+          : analyzed.matchedCategories
+      ).map((c) => c.toLowerCase());
+
+      if (normalizedTagFilter) {
+        if (
+          post.tagLower !== normalizedTagFilter &&
+          !cats.includes(normalizedTagFilter)
+        ) {
+          return false;
+        }
+      }
+
+      if (phraseFilter) {
+        const kws = (
+          Array.isArray(post.keywords) && post.keywords.length > 0
+            ? post.keywords
+            : analyzed.keywords
+        ).map((k) => k.toLowerCase());
+        const inText = (post.content || '')
+          .toLowerCase()
+          .includes(phraseFilter);
+        if (!inText && !kws.includes(phraseFilter)) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     let formatted = list.map((post) => {
       let distanceMiles: number | undefined;
@@ -167,20 +397,32 @@ postsRouter.get('/', async (req: Request, res: Response) => {
           haversineMiles(lat, lng, postLat, postLng).toFixed(1)
         );
       }
+      const analyzed = classifyPostTopics(post.content || '', post.tag);
       const { reactions, myReactions } = getReactionsPayload(
         post,
         callerDeviceId
       );
+      const comments = Array.isArray(post.comments) ? post.comments : [];
       return {
         _id: post._id,
         authorHandle: post.authorHandle,
         content: post.content,
-        tag: post.tag,
+        tag: analyzed.primaryTag,
+        categories:
+          Array.isArray(post.categories) && post.categories.length > 0
+            ? post.categories
+            : analyzed.matchedCategories,
+        keywords:
+          Array.isArray(post.keywords) && post.keywords.length > 0
+            ? post.keywords
+            : analyzed.keywords,
         background: post.background,
         location: post.location,
         distanceMiles,
         reactions,
         myReactions,
+        comments,
+        commentsCount: comments.length,
         flagsCount: post.flagsCount,
         isFlaggedByMe: callerDeviceId
           ? post.flaggedBy.includes(callerDeviceId)
@@ -208,7 +450,9 @@ postsRouter.get('/', async (req: Request, res: Response) => {
     return res.json({
       mode,
       posts: formatted.slice(0, limit),
-      popularTags: POPULAR_TAGS,
+      popularTags: trendingSummary.dynamicTags,
+      trendingTags: trendingSummary.trendingTags,
+      trendingPhrases: trendingSummary.trendingPhrases,
     });
   } catch (err) {
     console.error('Error in GET /posts:', err);
@@ -218,7 +462,7 @@ postsRouter.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/posts
- * Includes Automated Safety / Profanity Filter + Anti-Spam Rate Limiting
+ * Automatically classifies post into dynamic #Tag and extracts keywords/phrases!
  */
 postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
   try {
@@ -238,7 +482,6 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
       });
     }
 
-    // Run Automated Safety & Profanity Shield
     const safetyCheck = inspectAndSanitizeText(content);
     if (!safetyCheck.allowed) {
       return res.status(400).json({ error: safetyCheck.reason });
@@ -258,7 +501,10 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
       }
     }
 
-    const tag = normalizeTag(req.body?.tag);
+    // Dynamic NLP Topic & Hashtag Classification
+    const analyzed = classifyPostTopics(safeContent, req.body?.tag);
+    const tag = analyzed.primaryTag;
+
     const backgroundInput = req.body?.background;
     const background =
       backgroundInput && backgroundInput.value
@@ -300,10 +546,13 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         content: safeContent,
         tag,
         tagLower: tag.toLowerCase(),
+        categories: analyzed.matchedCategories,
+        keywords: analyzed.keywords,
         background,
         location: locationField,
         reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
         reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+        comments: [],
         flagsCount: 0,
         flaggedBy: [],
         isHidden: false,
@@ -316,10 +565,14 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
           authorHandle: created.authorHandle,
           content: created.content,
           tag: created.tag,
+          categories: created.categories,
+          keywords: created.keywords,
           background: created.background,
           location: created.location,
           reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
           myReactions: [],
+          comments: [],
+          commentsCount: 0,
           flagsCount: created.flagsCount,
           isFlaggedByMe: false,
           isHidden: created.isHidden,
@@ -337,6 +590,8 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
       content: safeContent,
       tag,
       tagLower: tag.toLowerCase(),
+      categories: analyzed.matchedCategories,
+      keywords: analyzed.keywords,
       background,
       location: locationField,
       reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
@@ -346,6 +601,7 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         eyes: [] as string[],
         heart: [] as string[],
       },
+      comments: [],
       flagsCount: 0,
       flaggedBy: [] as string[],
       isHidden: false,
@@ -362,10 +618,14 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         authorHandle: localPost.authorHandle,
         content: localPost.content,
         tag: localPost.tag,
+        categories: localPost.categories,
+        keywords: localPost.keywords,
         background: localPost.background,
         location: localPost.location,
         reactions: localPost.reactions,
         myReactions: [],
+        comments: [],
+        commentsCount: 0,
         flagsCount: localPost.flagsCount,
         isFlaggedByMe: false,
         isHidden: localPost.isHidden,
@@ -380,7 +640,9 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/posts/:id/react
- * Toggles an anonymous emoji reaction (🔥 fire, 💀 skull, 👀 eyes, ❤️ heart) on a visual feed card
+ * EXCLUSIVE SINGLE REACTION PER USER PER POST:
+ * A user can only have ONE active reaction per post. Clicking a different reaction
+ * automatically removes their previous reaction on that post before adding the new one.
  */
 postsRouter.post('/:id/react', async (req: Request, res: Response) => {
   try {
@@ -407,20 +669,33 @@ postsRouter.post('/:id/react', async (req: Request, res: Response) => {
         post.reactedBy = { fire: [], skull: [], eyes: [], heart: [] };
       }
 
-      const list = post.reactedBy[type] || [];
-      const existingIndex = list.indexOf(callerId);
-      let action: 'added' | 'removed' = 'added';
+      const alreadyHadThisType = (post.reactedBy[type] || []).includes(callerId);
+      let action: 'added' | 'removed' | 'switched' = 'added';
 
-      if (existingIndex >= 0) {
-        list.splice(existingIndex, 1);
-        post.reactions[type] = Math.max(0, (post.reactions[type] || 1) - 1);
-        action = 'removed';
-      } else {
-        list.push(callerId);
-        post.reactions[type] = (post.reactions[type] || 0) + 1;
+      // Step 1: Remove callerId from ALL reaction buckets on this post first (enforces max 1 reaction per post!)
+      let removedPreviousOther = false;
+      for (const rType of REACTION_TYPES) {
+        const bucket = post.reactedBy[rType] || [];
+        const idx = bucket.indexOf(callerId);
+        if (idx >= 0) {
+          bucket.splice(idx, 1);
+          post.reactedBy[rType] = bucket;
+          post.reactions[rType] = Math.max(0, (post.reactions[rType] || 1) - 1);
+          if (rType !== type) {
+            removedPreviousOther = true;
+          }
+        }
       }
 
-      post.reactedBy[type] = list;
+      // Step 2: If they clicked a new reaction (not toggling off the same one), add it
+      if (alreadyHadThisType) {
+        action = 'removed';
+      } else {
+        post.reactedBy[type].push(callerId);
+        post.reactions[type] = (post.reactions[type] || 0) + 1;
+        action = removedPreviousOther ? 'switched' : 'added';
+      }
+
       post.markModified('reactions');
       post.markModified('reactedBy');
       await post.save();
@@ -447,17 +722,30 @@ postsRouter.post('/:id/react', async (req: Request, res: Response) => {
       post.reactedBy = { fire: [], skull: [], eyes: [], heart: [] };
     }
 
-    const list = post.reactedBy[type];
-    const idx = list.indexOf(callerId);
-    let action: 'added' | 'removed' = 'added';
+    const alreadyHadThisType = (post.reactedBy[type] || []).includes(callerId);
+    let action: 'added' | 'removed' | 'switched' = 'added';
+    let removedPreviousOther = false;
 
-    if (idx >= 0) {
-      list.splice(idx, 1);
-      post.reactions[type] = Math.max(0, post.reactions[type] - 1);
+    // Remove callerId from all reaction types on this post first
+    for (const rType of REACTION_TYPES) {
+      const bucket = post.reactedBy[rType] || [];
+      const idx = bucket.indexOf(callerId);
+      if (idx >= 0) {
+        bucket.splice(idx, 1);
+        post.reactedBy[rType] = bucket;
+        post.reactions[rType] = Math.max(0, (post.reactions[rType] || 1) - 1);
+        if (rType !== type) {
+          removedPreviousOther = true;
+        }
+      }
+    }
+
+    if (alreadyHadThisType) {
       action = 'removed';
     } else {
-      list.push(callerId);
+      post.reactedBy[type].push(callerId);
       post.reactions[type] = (post.reactions[type] || 0) + 1;
+      action = removedPreviousOther ? 'switched' : 'added';
     }
 
     post.updatedAt = new Date().toISOString();
@@ -478,8 +766,101 @@ postsRouter.post('/:id/react', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v1/posts/:id/comments
+ * Wow Feature #2: Anonymous Whisper Threads (Micro-Comments under any visual confession card)
+ */
+postsRouter.post('/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const postId = req.params.id;
+    const rawText = (req.body?.text as string) || '';
+    const text = rawText.trim();
+    const callerId =
+      (req.body?.deviceId as string) ||
+      (req.headers['x-device-id'] as string) ||
+      'anon-commenter';
+    const authorHandle =
+      (req.body?.authorHandle as string)?.trim() || 'AnonymousRebel';
+
+    if (!text) {
+      return res.status(400).json({ error: 'Whisper reply cannot be empty.' });
+    }
+    if (text.length > 180) {
+      return res
+        .status(400)
+        .json({ error: 'Whisper reply must be 180 characters or less.' });
+    }
+
+    const safety = inspectAndSanitizeText(text);
+    if (!safety.allowed) {
+      return res.status(400).json({ error: safety.reason });
+    }
+
+    if (isUsingMongo()) {
+      const post = await PostModel.findById(postId);
+      if (!post) {
+        return res.status(404).json({ error: 'Post not found.' });
+      }
+      const newComment = {
+        _id: createId(),
+        authorHandle,
+        authorDeviceId: callerId,
+        text: safety.sanitizedText,
+        isOp:
+          post.authorDeviceId === callerId ||
+          post.authorHandle.toLowerCase() === authorHandle.toLowerCase(),
+        createdAt: new Date(),
+      };
+      if (!Array.isArray(post.comments)) {
+        post.comments = [];
+      }
+      post.comments.push(newComment);
+      post.markModified('comments');
+      await post.save();
+
+      return res.status(201).json({
+        _id: String(post._id),
+        comment: newComment,
+        comments: post.comments,
+        commentsCount: post.comments.length,
+      });
+    }
+
+    reloadLocalStoreFromDiskIfNeeded();
+    const post = localStore.posts.find((p) => p._id === postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+    const newComment = {
+      _id: createId(),
+      authorHandle,
+      authorDeviceId: callerId,
+      text: safety.sanitizedText,
+      isOp:
+        post.authorDeviceId === callerId ||
+        post.authorHandle.toLowerCase() === authorHandle.toLowerCase(),
+      createdAt: new Date().toISOString(),
+    };
+    if (!Array.isArray(post.comments)) {
+      post.comments = [];
+    }
+    post.comments.push(newComment);
+    post.updatedAt = new Date().toISOString();
+    saveLocalStore();
+
+    return res.status(201).json({
+      _id: post._id,
+      comment: newComment,
+      comments: post.comments,
+      commentsCount: post.comments.length,
+    });
+  } catch (err) {
+    console.error('Error in POST /posts/:id/comments:', err);
+    return res.status(500).json({ error: 'Failed to post comment.' });
+  }
+});
+
+/**
  * POST /api/v1/posts/:id/flag
- * Crowdsourced moderation: Any post that receives 3 user flags is automatically hidden from view.
  */
 postsRouter.post('/:id/flag', async (req: Request, res: Response) => {
   try {

@@ -10,6 +10,8 @@ export interface IInboxMessage extends Document {
   repliedAt?: Date;
   themeId: string;
   isRead: boolean;
+  burnAfterReading: boolean;
+  senderHint?: string;
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -56,6 +58,13 @@ const InboxMessageSchema = new Schema<IInboxMessage>(
     isRead: {
       type: Boolean,
       default: false,
+    },
+    burnAfterReading: {
+      type: Boolean,
+      default: false,
+    },
+    senderHint: {
+      type: String,
     },
     flagsCount: {
       type: Number,

@@ -499,12 +499,12 @@ export default function App() {
                       {REACTION_TYPES.map((type: ReactionType) => {
                         const meta = REACTION_META[type];
                         const count = post.reactions?.[type] ?? 0;
-                        const active = post.myReactions?.includes(type);
+                        const active = post.myReactions?.[0] === type;
                         return (
                           <TouchableOpacity
                             key={type}
                             onPress={async () => {
-                              // 1. Optimistic instant toggle + AsyncStorage persistence
+                              // 1. Optimistic instant toggle enforcing strictly 1 reaction per user per post
                               setPosts((prev) =>
                                 prev.map((p) => {
                                   if (p._id !== post._id) return p;
@@ -516,20 +516,25 @@ export default function App() {
                                       heart: 0,
                                     }),
                                   };
-                                  const nextMy = Array.isArray(p.myReactions)
+                                  const currentMy = Array.isArray(p.myReactions)
                                     ? [...p.myReactions]
                                     : [];
-                                  const idx = nextMy.indexOf(type);
-                                  if (idx >= 0) {
-                                    nextMy.splice(idx, 1);
-                                    nextRx[type] = Math.max(
+                                  const alreadyHadThis =
+                                    currentMy.includes(type);
+
+                                  for (const prevType of currentMy) {
+                                    nextRx[prevType] = Math.max(
                                       0,
-                                      (nextRx[type] || 1) - 1
+                                      (nextRx[prevType] || 1) - 1
                                     );
-                                  } else {
-                                    nextMy.push(type);
-                                    nextRx[type] = (nextRx[type] || 0) + 1;
                                   }
+
+                                  let nextMy: ReactionType[] = [];
+                                  if (!alreadyHadThis) {
+                                    nextRx[type] = (nextRx[type] || 0) + 1;
+                                    nextMy = [type];
+                                  }
+
                                   AsyncStorage.getItem(REACTIONS_CACHE_KEY)
                                     .then((raw) => {
                                       const cache = raw ? JSON.parse(raw) : {};
@@ -562,7 +567,9 @@ export default function App() {
                                       ? {
                                           ...p,
                                           reactions: res.reactions,
-                                          myReactions: res.myReactions,
+                                          myReactions: (
+                                            res.myReactions || []
+                                          ).slice(0, 1),
                                         }
                                       : p
                                   )

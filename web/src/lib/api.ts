@@ -1,14 +1,18 @@
 import {
   ALL_BACKGROUNDS,
   CardBackground,
+  classifyPostTopics,
   CURATED_GRADIENTS,
   CURATED_UNSPLASH_IMAGES,
   generateRandomHandle,
   InboxMessageDTO,
   POPULAR_TAGS,
+  PostCommentDTO,
   PostDTO,
   ReactionCounts,
   ReactionType,
+  TrendingPhraseItem,
+  TrendingTagItem,
   UserIdentityDTO,
 } from '@shared/index';
 
@@ -17,8 +21,10 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     _id: 'seed-post-1',
     authorHandle: 'GoldenWizard',
     content:
-      'Told my boss my Wi-Fi crashed during the 4PM standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫',
-    tag: '#WorkConfessions',
+      'Told my boss at the office my Wi-Fi crashed during the 4PM work standup when I was actually already in line for rooftop tacos & margaritas 🌮🤫',
+    tag: '#Work',
+    categories: ['#Work', '#NightOut'],
+    keywords: ['boss', 'office', 'work', 'standup', 'rooftop', 'tacos', 'margaritas'],
     background: CURATED_GRADIENTS[0],
     location: {
       type: 'Point',
@@ -27,6 +33,16 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     },
     reactions: { fire: 14, skull: 8, eyes: 5, heart: 3 },
     myReactions: [],
+    comments: [
+      {
+        _id: 'seed-comment-1',
+        authorHandle: 'NeonPanther',
+        text: 'Honestly the 4PM Friday standup deserves to be skipped every week 😂🔥',
+        isOp: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+      },
+    ],
+    commentsCount: 1,
     flagsCount: 0,
     isHidden: false,
     createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
@@ -35,8 +51,10 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     _id: 'seed-post-2',
     authorHandle: 'NeonPanther',
     content:
-      'Whoever was wearing the vintage neon green puffer at the 2AM warehouse set last night... we locked eyes 3 times. Drop a sign 👀⚡',
+      'Whoever was wearing the vintage neon green puffer at the 2AM warehouse rave party last night... we locked eyes 3 times. Drop a sign 👀⚡',
     tag: '#NightOut',
+    categories: ['#NightOut', '#SexAndDating'],
+    keywords: ['warehouse', 'rave', 'party', '2am', 'night'],
     background: CURATED_UNSPLASH_IMAGES[2],
     location: {
       type: 'Point',
@@ -45,6 +63,8 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     },
     reactions: { fire: 22, skull: 2, eyes: 19, heart: 11 },
     myReactions: [],
+    comments: [],
+    commentsCount: 0,
     flagsCount: 0,
     isHidden: false,
     createdAt: new Date(Date.now() - 1000 * 60 * 24).toISOString(),
@@ -53,8 +73,10 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     _id: 'seed-post-3',
     authorHandle: 'AcidRebel',
     content:
-      'Unpopular opinion: 3AM diner fries with the squad hit 100x harder than any $200 reservation spot in the city.',
-    tag: '#UnpopularOpinion',
+      'My gym crush finally asked to spot me on bench press today and I forgot how to count past 4 reps 💀🏋️‍♂️',
+    tag: '#Gym',
+    categories: ['#Gym', '#SexAndDating'],
+    keywords: ['gym', 'crush', 'bench', 'workout'],
     background: CURATED_GRADIENTS[1],
     location: {
       type: 'Point',
@@ -63,6 +85,8 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     },
     reactions: { fire: 31, skull: 6, eyes: 4, heart: 18 },
     myReactions: [],
+    comments: [],
+    commentsCount: 0,
     flagsCount: 0,
     isHidden: false,
     createdAt: new Date(Date.now() - 1000 * 60 * 47).toISOString(),
@@ -71,8 +95,10 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     _id: 'seed-post-4',
     authorHandle: 'CyberViper',
     content:
-      'Our entire group project got an A+ and none of us know who actually wrote the final 6 slides on the Google Doc 💀',
-    tag: '#CampusTea',
+      'Put my semester campus allowance into a Solana crypto memecoin at 3AM and woke up up 400%. Paying off the whole hostel dorm tuition 🚀💎',
+    tag: '#Crypto',
+    categories: ['#Crypto', '#Campus'],
+    keywords: ['crypto', 'solana', 'memecoin', 'campus', 'semester', 'hostel', 'dorm'],
     background: CURATED_UNSPLASH_IMAGES[0],
     location: {
       type: 'Point',
@@ -81,9 +107,33 @@ export const OFFLINE_SEED_POSTS: PostDTO[] = [
     },
     reactions: { fire: 9, skull: 27, eyes: 7, heart: 4 },
     myReactions: [],
+    comments: [],
+    commentsCount: 0,
     flagsCount: 0,
     isHidden: false,
     createdAt: new Date(Date.now() - 1000 * 60 * 95).toISOString(),
+  },
+  {
+    _id: 'seed-post-5',
+    authorHandle: 'GoldenWizard',
+    content:
+      'Sneaky link confession: hooking up with someone from the office HR department is all fun and games until you both get invited to the same 9AM meeting 👀🔥',
+    tag: '#SexAndDating',
+    categories: ['#SexAndDating', '#Work'],
+    keywords: ['sneaky', 'sex', 'dating', 'office', 'hr', 'meeting', 'work'],
+    background: CURATED_GRADIENTS[3],
+    location: {
+      type: 'Point',
+      coordinates: [-74.001, 40.718],
+      label: '0.6 mi away',
+    },
+    reactions: { fire: 7, skull: 3, eyes: 15, heart: 24 },
+    myReactions: [],
+    comments: [],
+    commentsCount: 0,
+    flagsCount: 0,
+    isHidden: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 140).toISOString(),
   },
 ];
 
@@ -221,16 +271,29 @@ export async function rerollHandle(): Promise<UserIdentityDTO> {
 export async function fetchPosts(params: {
   mode: 'global' | 'near';
   tag?: string;
+  phrase?: string;
   lat?: number;
   lng?: number;
-}): Promise<{ posts: PostDTO[]; popularTags: readonly string[] }> {
+}): Promise<{
+  posts: PostDTO[];
+  popularTags: readonly string[];
+  trendingTags?: TrendingTagItem[];
+  trendingPhrases?: TrendingPhraseItem[];
+}> {
   const deviceId = getOrCreateDeviceId();
   const url = new URL(`${API_BASE}/posts`);
   url.searchParams.set('mode', params.mode);
   if (params.tag && params.tag !== 'All') {
     url.searchParams.set('tag', params.tag);
   }
-  if (params.mode === 'near' && params.lat !== undefined && params.lng !== undefined) {
+  if (params.phrase) {
+    url.searchParams.set('phrase', params.phrase);
+  }
+  if (
+    params.mode === 'near' &&
+    params.lat !== undefined &&
+    params.lng !== undefined
+  ) {
     url.searchParams.set('lat', String(params.lat));
     url.searchParams.set('lng', String(params.lng));
     url.searchParams.set('radiusMiles', '5');
@@ -243,15 +306,20 @@ export async function fetchPosts(params: {
     });
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data.posts) && data.posts.length > 0) {
-        return data;
+      if (Array.isArray(data.posts)) {
+        if (
+          data.posts.length > 0 ||
+          (params.tag && params.tag !== 'All') ||
+          params.phrase
+        ) {
+          return data;
+        }
       }
     }
   } catch {
     // Fallback below if Render is waking up from cold start
   }
 
-  // Fallback to cached posts or built-in seed posts so feed is never empty
   let fallbackPosts = [...OFFLINE_SEED_POSTS];
   if (typeof window !== 'undefined') {
     try {
@@ -265,9 +333,22 @@ export async function fetchPosts(params: {
   }
 
   if (params.tag && params.tag !== 'All') {
-    const targetTag = params.tag.toLowerCase();
-    fallbackPosts = fallbackPosts.filter(
-      (p) => p.tag.toLowerCase() === targetTag
+    const targetTag = (
+      params.tag.startsWith('#') ? params.tag : `#${params.tag}`
+    ).toLowerCase();
+    fallbackPosts = fallbackPosts.filter((p) => {
+      const analyzed = classifyPostTopics(p.content, p.tag);
+      const cats = (p.categories || analyzed.matchedCategories).map((c) =>
+        c.toLowerCase()
+      );
+      return p.tag.toLowerCase() === targetTag || cats.includes(targetTag);
+    });
+  }
+
+  if (params.phrase) {
+    const targetPhrase = params.phrase.toLowerCase();
+    fallbackPosts = fallbackPosts.filter((p) =>
+      p.content.toLowerCase().includes(targetPhrase)
     );
   }
 
@@ -277,15 +358,98 @@ export async function fetchPosts(params: {
   };
 }
 
+export async function fetchTrendingData(
+  period: '24h' | '7d' | 'all' = 'all'
+): Promise<{
+  period: string;
+  trendingTags: TrendingTagItem[];
+  trendingPhrases: TrendingPhraseItem[];
+  dynamicTags: string[];
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/posts/trending?period=${encodeURIComponent(period)}`,
+      { cache: 'no-store' }
+    );
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  return {
+    period,
+    trendingTags: POPULAR_TAGS.map((tag, idx) => ({
+      tag,
+      count: Math.max(1, 6 - idx),
+      reactionsCount: (8 - idx) * 7,
+      score: (6 - idx) * 10 + (8 - idx) * 7,
+    })),
+    trendingPhrases: [
+      { phrase: 'work', category: '#Work', count: 5, score: 85 },
+      { phrase: 'office', category: '#Work', count: 4, score: 74 },
+      { phrase: 'crypto', category: '#Crypto', count: 4, score: 71 },
+      { phrase: 'sex', category: '#SexAndDating', count: 3, score: 68 },
+      { phrase: 'gym', category: '#Gym', count: 3, score: 64 },
+      { phrase: 'crush', category: '#SexAndDating', count: 3, score: 59 },
+      { phrase: 'campus', category: '#Campus', count: 3, score: 52 },
+      { phrase: 'politics', category: '#Politics', count: 2, score: 40 },
+      { phrase: 'religion', category: '#Religion', count: 2, score: 38 },
+    ],
+    dynamicTags: [...POPULAR_TAGS],
+  };
+}
+
+export async function addPostComment(
+  postId: string,
+  text: string,
+  authorHandle: string
+): Promise<{
+  _id: string;
+  comment: PostCommentDTO;
+  comments: PostCommentDTO[];
+  commentsCount: number;
+}> {
+  const deviceId = getOrCreateDeviceId();
+  try {
+    const res = await fetch(`${API_BASE}/posts/${postId}/comments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId,
+      },
+      body: JSON.stringify({ text, authorHandle, deviceId }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  const localComment: PostCommentDTO = {
+    _id: `comment-${Date.now()}`,
+    authorHandle,
+    text: text.trim(),
+    isOp: false,
+    createdAt: new Date().toISOString(),
+  };
+  return {
+    _id: postId,
+    comment: localComment,
+    comments: [localComment],
+    commentsCount: 1,
+  };
+}
+
 export async function createPost(payload: {
   content: string;
-  tag: string;
+  tag?: string;
   background: CardBackground;
   authorHandle?: string;
   lat?: number;
   lng?: number;
 }): Promise<PostDTO> {
   const deviceId = getOrCreateDeviceId();
+  const analyzed = classifyPostTopics(payload.content, payload.tag);
+
   try {
     const res = await fetch(`${API_BASE}/posts`, {
       method: 'POST',
@@ -293,7 +457,11 @@ export async function createPost(payload: {
         'Content-Type': 'application/json',
         'x-device-id': deviceId,
       },
-      body: JSON.stringify({ ...payload, deviceId }),
+      body: JSON.stringify({
+        ...payload,
+        tag: analyzed.primaryTag,
+        deviceId,
+      }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -310,14 +478,15 @@ export async function createPost(payload: {
     ) {
       throw err;
     }
-    // If Render server is waking up from cold start, save post locally so posting always succeeds immediately
   }
 
   const localPost: PostDTO = {
     _id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     authorHandle: payload.authorHandle || 'GoldenWizard',
     content: payload.content.trim(),
-    tag: payload.tag || '#WorkConfessions',
+    tag: analyzed.primaryTag,
+    categories: analyzed.matchedCategories,
+    keywords: analyzed.keywords,
     background: payload.background || CURATED_GRADIENTS[0],
     location:
       payload.lat !== undefined && payload.lng !== undefined
@@ -329,6 +498,8 @@ export async function createPost(payload: {
         : undefined,
     reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
     myReactions: [],
+    comments: [],
+    commentsCount: 0,
     flagsCount: 0,
     isFlaggedByMe: false,
     isHidden: false,
