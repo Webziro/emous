@@ -47,6 +47,27 @@ export function haversineMiles(
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function getPollPayload(doc: any, callerDeviceId: string) {
+  if (!doc.poll?.optionA?.text || !doc.poll?.optionB?.text) return undefined;
+  const votesA = doc.poll.optionA.votes ?? 0;
+  const votesB = doc.poll.optionB.votes ?? 0;
+  const votedA =
+    callerDeviceId &&
+    Array.isArray(doc.poll.optionA.votedBy) &&
+    doc.poll.optionA.votedBy.includes(callerDeviceId);
+  const votedB =
+    callerDeviceId &&
+    Array.isArray(doc.poll.optionB.votedBy) &&
+    doc.poll.optionB.votedBy.includes(callerDeviceId);
+
+  return {
+    optionA: { id: 'A' as const, text: doc.poll.optionA.text, votes: votesA },
+    optionB: { id: 'B' as const, text: doc.poll.optionB.text, votes: votesB },
+    totalVotes: votesA + votesB,
+    myVote: votedA ? ('A' as const) : votedB ? ('B' as const) : null,
+  };
+}
+
 function getReactionsPayload(
   doc: any,
   callerDeviceId: string
@@ -341,6 +362,8 @@ postsRouter.get('/', async (req: Request, res: Response) => {
           myReactions,
           comments,
           commentsCount: comments.length,
+          poll: getPollPayload(post, callerDeviceId),
+          qaCard: post.qaCard?.question ? post.qaCard : undefined,
           flagsCount: post.flagsCount,
           isFlaggedByMe: callerDeviceId
             ? post.flaggedBy?.includes(callerDeviceId)
@@ -431,6 +454,8 @@ postsRouter.get('/', async (req: Request, res: Response) => {
         myReactions,
         comments,
         commentsCount: comments.length,
+        poll: getPollPayload(post, callerDeviceId),
+        qaCard: post.qaCard?.question ? post.qaCard : undefined,
         flagsCount: post.flagsCount,
         isFlaggedByMe: callerDeviceId
           ? post.flaggedBy.includes(callerDeviceId)
@@ -547,6 +572,30 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
       };
     }
 
+    const pollInput =
+      req.body?.poll?.optionA && req.body?.poll?.optionB
+        ? {
+            optionA: {
+              text: String(req.body.poll.optionA).trim().slice(0, 45),
+              votes: 0,
+              votedBy: [] as string[],
+            },
+            optionB: {
+              text: String(req.body.poll.optionB).trim().slice(0, 45),
+              votes: 0,
+              votedBy: [] as string[],
+            },
+          }
+        : undefined;
+
+    const qaCardInput =
+      req.body?.qaCard?.question && req.body?.qaCard?.reply
+        ? {
+            question: String(req.body.qaCard.question).trim().slice(0, 300),
+            reply: String(req.body.qaCard.reply).trim().slice(0, 300),
+          }
+        : undefined;
+
     if (isUsingMongo()) {
       const created = await PostModel.create({
         authorDeviceId: deviceId,
@@ -561,6 +610,8 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         reactions: { fire: 0, skull: 0, eyes: 0, heart: 0 },
         reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
         comments: [],
+        poll: pollInput,
+        qaCard: qaCardInput,
         flagsCount: 0,
         flaggedBy: [],
         isHidden: false,
@@ -581,6 +632,8 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
           myReactions: [],
           comments: [],
           commentsCount: 0,
+          poll: getPollPayload(created, deviceId),
+          qaCard: created.qaCard?.question ? created.qaCard : undefined,
           flagsCount: created.flagsCount,
           isFlaggedByMe: false,
           isHidden: created.isHidden,
@@ -610,6 +663,8 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         heart: [] as string[],
       },
       comments: [],
+      poll: pollInput,
+      qaCard: qaCardInput,
       flagsCount: 0,
       flaggedBy: [] as string[],
       isHidden: false,
@@ -634,6 +689,8 @@ postsRouter.post('/', postRateLimiter, async (req: Request, res: Response) => {
         myReactions: [],
         comments: [],
         commentsCount: 0,
+        poll: getPollPayload(localPost, deviceId),
+        qaCard: localPost.qaCard?.question ? localPost.qaCard : undefined,
         flagsCount: localPost.flagsCount,
         isFlaggedByMe: false,
         isHidden: localPost.isHidden,
@@ -864,6 +921,105 @@ postsRouter.post('/:id/comments', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error in POST /posts/:id/comments:', err);
     return res.status(500).json({ error: 'Failed to post comment.' });
+  }
+});
+
+/**
+ * POST /api/v1/posts/:id/poll
+ * Wow Feature #5: Vote on a 2-option Anonymous Hot Take Poll on a Visual Feed Card (1 vote per user, switchable)
+ */
+postsRouter.post('/:id/poll', async (req: Request, res: Response) => {
+  try {
+    const postId = req.params.id;
+    const option = (req.body?.option as 'A' | 'B') || 'A';
+    const callerId =
+      (req.body?.deviceId as string) ||
+      (req.headers['x-device-id'] as string) ||
+      'anon-voter';
+
+    if (option !== 'A' && option !== 'B') {
+      return res.status(400).json({ error: 'Option must be A or B.' });
+    }
+
+    if (isUsingMongo()) {
+      const post = await PostModel.findById(postId);
+      if (!post || !post.poll?.optionA?.text || !post.poll?.optionB?.text) {
+        return res.status(404).json({ error: 'Poll not found on this post.' });
+      }
+
+      const listA = post.poll.optionA.votedBy || [];
+      const listB = post.poll.optionB.votedBy || [];
+
+      const idxA = listA.indexOf(callerId);
+      if (idxA >= 0) {
+        listA.splice(idxA, 1);
+        post.poll.optionA.votes = Math.max(0, (post.poll.optionA.votes || 1) - 1);
+      }
+      const idxB = listB.indexOf(callerId);
+      if (idxB >= 0) {
+        listB.splice(idxB, 1);
+        post.poll.optionB.votes = Math.max(0, (post.poll.optionB.votes || 1) - 1);
+      }
+
+      if (option === 'A') {
+        listA.push(callerId);
+        post.poll.optionA.votes = (post.poll.optionA.votes || 0) + 1;
+      } else {
+        listB.push(callerId);
+        post.poll.optionB.votes = (post.poll.optionB.votes || 0) + 1;
+      }
+
+      post.poll.optionA.votedBy = listA;
+      post.poll.optionB.votedBy = listB;
+      post.markModified('poll');
+      await post.save();
+
+      return res.json({
+        _id: String(post._id),
+        poll: getPollPayload(post, callerId),
+      });
+    }
+
+    reloadLocalStoreFromDiskIfNeeded();
+    const post = localStore.posts.find((p) => p._id === postId);
+    if (!post || !post.poll?.optionA?.text || !post.poll?.optionB?.text) {
+      return res.status(404).json({ error: 'Poll not found on this post.' });
+    }
+
+    const listA = post.poll.optionA.votedBy || [];
+    const listB = post.poll.optionB.votedBy || [];
+
+    const idxA = listA.indexOf(callerId);
+    if (idxA >= 0) {
+      listA.splice(idxA, 1);
+      post.poll.optionA.votes = Math.max(0, (post.poll.optionA.votes || 1) - 1);
+    }
+    const idxB = listB.indexOf(callerId);
+    if (idxB >= 0) {
+      listB.splice(idxB, 1);
+      post.poll.optionB.votes = Math.max(0, (post.poll.optionB.votes || 1) - 1);
+    }
+
+    if (option === 'A') {
+      listA.push(callerId);
+      post.poll.optionA.votes = (post.poll.optionA.votes || 0) + 1;
+    } else {
+      listB.push(callerId);
+      post.poll.optionB.votes = (post.poll.optionB.votes || 0) + 1;
+    }
+
+    post.poll.optionA.votedBy = listA;
+    post.poll.optionB.votedBy = listB;
+    post.updatedAt = new Date().toISOString();
+    saveLocalStore();
+
+    return res.json({
+      _id: post._id,
+      poll: getPollPayload(post, callerId),
+    });
+  } catch (err) {
+    console.error('Error in POST /posts/:id/poll:', err);
+    return res.status(500).json({ error: 'Failed to vote on poll.' });
   }
 });
 

@@ -38,6 +38,7 @@ export default function AskReceiverPage() {
 
   const [question, setQuestion] = useState('');
   const [themeIndex, setThemeIndex] = useState(0);
+  const [burnAfterReading, setBurnAfterReading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -96,7 +97,8 @@ export default function AskReceiverPage() {
       await sendAnonymousInboxMessage(
         targetHandle,
         question.trim(),
-        activeTheme.id
+        activeTheme.id,
+        burnAfterReading
       );
       setSentSuccess(true);
       setQuestion('');
@@ -248,9 +250,21 @@ export default function AskReceiverPage() {
 
               <div
                 style={{ color: activeTheme.topCardText }}
-                className="mt-2 flex items-center justify-between text-xs font-extrabold"
+                className="mt-2 flex items-center justify-between text-xs font-extrabold flex-wrap gap-2"
               >
-                <span>🔥 Auto-burns in 30 days</span>
+                <button
+                  type="button"
+                  onClick={() => setBurnAfterReading((prev) => !prev)}
+                  className={`px-2.5 py-1 rounded-full border-2 border-black text-[11px] font-extrabold transition-colors ${
+                    burnAfterReading
+                      ? 'bg-black text-emous-pink'
+                      : 'bg-white/90 text-black'
+                  }`}
+                >
+                  {burnAfterReading
+                    ? '💣 Burn After 1st Read: ON'
+                    : '🔥 30d Auto-Burn (Tap for 1-Read Self-Destruct)'}
+                </button>
                 <span>
                   {question.length}/{BRAND.maxPostLength}
                 </span>

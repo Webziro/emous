@@ -37,6 +37,14 @@ export interface IPost extends Document {
     heart: string[];
   };
   comments: IPostComment[];
+  poll?: {
+    optionA: { text: string; votes: number; votedBy: string[] };
+    optionB: { text: string; votes: number; votedBy: string[] };
+  };
+  qaCard?: {
+    question: string;
+    reply: string;
+  };
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -130,6 +138,22 @@ const PostSchema = new Schema<IPost>(
         },
       ],
       default: [],
+    },
+    poll: {
+      optionA: {
+        text: { type: String },
+        votes: { type: Number, default: 0 },
+        votedBy: { type: [String], default: [] },
+      },
+      optionB: {
+        text: { type: String },
+        votes: { type: Number, default: 0 },
+        votedBy: { type: [String], default: [] },
+      },
+    },
+    qaCard: {
+      question: { type: String },
+      reply: { type: String },
     },
     flagsCount: {
       type: Number,

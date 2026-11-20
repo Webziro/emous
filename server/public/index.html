@@ -284,6 +284,13 @@
       isComposerOpen: false,
       draftContent: '',
       draftTag: 'AUTO',
+      enablePollDraft: false,
+      pollOptionA: '',
+      pollOptionB: '',
+      activeCommentPostId: null,
+      commentDraft: '',
+      revealedHints: {},
+      askBurnAfterReading: false,
       draftBg: {
         id: 'grad-neon-riot',
         type: 'gradient',
@@ -373,6 +380,34 @@
           render();
         }
       }, 3400);
+    }
+
+    function formatBurnCountdown(iso) {
+      const createdMs = new Date(iso).getTime();
+      const expiresMs = createdMs + 30 * 24 * 60 * 60 * 1000;
+      const rem = Math.max(0, expiresMs - Date.now());
+      const days = Math.floor(rem / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((rem % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      return `${days}d ${hours}h left`;
+    }
+
+    function getStreetCred() {
+      const handle = getCurrentHandle().toLowerCase();
+      const myPosts = state.posts.filter((p) => (p.authorHandle || '').toLowerCase() === handle);
+      const rxSum = myPosts.reduce(
+        (acc, p) =>
+          acc +
+          (p.reactions?.fire || 0) +
+          (p.reactions?.skull || 0) +
+          (p.reactions?.eyes || 0) +
+          (p.reactions?.heart || 0),
+        0
+      );
+      const score = 25 + myPosts.length * 15 + rxSum * 10 + state.inboxMessages.length * 12;
+      if (score >= 300) return { score, emoji: '👑', tier: 'Emous Legend' };
+      if (score >= 120) return { score, emoji: '⚡', tier: 'Neon Phantom' };
+      if (score >= 50) return { score, emoji: '🔥', tier: 'Street Confessor' };
+      return { score, emoji: '🎭', tier: 'Shadow Rookie' };
     }
 
     function formatRelativeTime(iso) {
@@ -786,6 +821,10 @@
       e.preventDefault();
       if (!state.draftContent.trim()) return;
       const chosenTag = detectAutoTag(state.draftContent, state.draftTag);
+      const pollPayload =
+        state.enablePollDraft && state.pollOptionA.trim() && state.pollOptionB.trim()
+          ? { optionA: state.pollOptionA.trim(), optionB: state.pollOptionB.trim() }
+          : undefined;
       const res = await fetch(`${API_BASE}/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
@@ -796,6 +835,7 @@
           authorHandle: getCurrentHandle(),
           lat: state.coords.lat,
           lng: state.coords.lng,
+          poll: pollPayload,
           deviceId: state.deviceId
         })
       });
@@ -810,6 +850,9 @@
           localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(state.posts.slice(0, 60)));
         } catch (e) {}
         state.draftContent = '';
+        state.enablePollDraft = false;
+        state.pollOptionA = '';
+        state.pollOptionB = '';
         state.isComposerOpen = false;
         if (state.route === 'ask') {
           state.route = 'main';
@@ -819,8 +862,103 @@
         showToast(
           data.wasMasked
             ? '🛡️ Card dropped (Safety Shield auto-masked spicy words!)'
-            : '🔥 Visual confession card dropped to the feed!'
+            : `🔥 Auto-categorized under ${data.post.tag} & dropped to feed!`
         );
+      }
+    };
+
+    // Wow Feature #5: Vote on a 2-Option Poll
+    window.handleVotePoll = async (postId, option) => {
+      state.posts = state.posts.map((p) => {
+        if (p._id !== postId || !p.poll) return p;
+        const prev = p.poll.myVote;
+        let vA = p.poll.optionA.votes || 0;
+        let vB = p.poll.optionB.votes || 0;
+        if (prev === 'A') vA = Math.max(0, vA - 1);
+        if (prev === 'B') vB = Math.max(0, vB - 1);
+        if (option === 'A') vA += 1;
+        if (option === 'B') vB += 1;
+        return {
+          ...p,
+          poll: {
+            optionA: { ...p.poll.optionA, votes: vA },
+            optionB: { ...p.poll.optionB, votes: vB },
+            totalVotes: vA + vB,
+            myVote: option
+          }
+        };
+      });
+      render();
+      try {
+        const res = await fetch(`${API_BASE}/posts/${postId}/poll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+          body: JSON.stringify({ deviceId: state.deviceId, option })
+        });
+        const data = await res.json();
+        if (res.ok && data.poll) {
+          state.posts = state.posts.map((p) => (p._id === postId ? { ...p, poll: data.poll } : p));
+          render();
+        }
+      } catch (e) {}
+    };
+
+    // Wow Feature #2: Submit an Anonymous Whisper Comment
+    window.handleAddWhisperComment = async (e) => {
+      e.preventDefault();
+      if (!state.activeCommentPostId || !state.commentDraft.trim()) return;
+      const postId = state.activeCommentPostId;
+      try {
+        const res = await fetch(`${API_BASE}/posts/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+          body: JSON.stringify({
+            text: state.commentDraft.trim(),
+            authorHandle: getCurrentHandle(),
+            deviceId: state.deviceId
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.comments) {
+          state.posts = state.posts.map((p) =>
+            p._id === postId ? { ...p, comments: data.comments, commentsCount: data.commentsCount } : p
+          );
+          state.commentDraft = '';
+          showToast('💬 Anonymous whisper reply added!');
+          render();
+        }
+      } catch (err) {}
+    };
+
+    // Wow Feature #1: Drop an Inbox Q&A Directly to the Public Visual Feed
+    window.handleDropQaToPublicFeed = async () => {
+      if (!state.activeStoryMsg) return;
+      const reply = state.replyText.trim() || '🤫🔥';
+      await fetch(`${API_BASE}/inbox/${state.activeStoryMsg._id}/reply`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply, themeId: state.storyThemeId })
+      });
+      const res = await fetch(`${API_BASE}/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': state.deviceId },
+        body: JSON.stringify({
+          content: `🤫 Q: "${state.activeStoryMsg.question}" — ⚡ A: ${reply}`.slice(0, 300),
+          background: state.draftBg,
+          authorHandle: getCurrentHandle(),
+          lat: state.coords.lat,
+          lng: state.coords.lng,
+          qaCard: { question: state.activeStoryMsg.question, reply },
+          deviceId: state.deviceId
+        })
+      });
+      const data = await res.json();
+      if (data.post) {
+        state.posts.unshift(data.post);
+        state.activeStoryMsg = null;
+        state.activeScreen = 'feed';
+        showToast('🚀 Q&A published to the Public Feed for everyone to read!');
+        render();
       }
     };
 
@@ -1224,6 +1362,46 @@
                 </div>
               </div>
 
+              <!-- Wow Feature #5: Optional 2-Option Poll Builder -->
+              <div class="bg-black/60 rounded-xl p-2.5 border-2 border-black space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-extrabold uppercase text-emous-yellow">📊 Add 2-Option Poll (Optional)</span>
+                  <button
+                    type="button"
+                    onclick="state.enablePollDraft = !state.enablePollDraft; render();"
+                    class="text-[9px] font-display font-extrabold px-2 py-0.5 rounded border border-black uppercase ${
+                      state.enablePollDraft ? 'bg-emous-pink text-white' : 'bg-emous-surface text-neutral-300'
+                    }"
+                  >
+                    ${state.enablePollDraft ? '✕ Remove Poll' : '+ Attach Poll'}
+                  </button>
+                </div>
+                ${
+                  state.enablePollDraft
+                    ? `
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="text"
+                      maxlength="40"
+                      value="${escapeHtml(state.pollOptionA)}"
+                      oninput="state.pollOptionA = this.value"
+                      placeholder="Option A (e.g. Run 🏃)"
+                      class="bg-black text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-white/25 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      maxlength="40"
+                      value="${escapeHtml(state.pollOptionB)}"
+                      oninput="state.pollOptionB = this.value"
+                      placeholder="Option B (e.g. Stay 💰)"
+                      class="bg-black text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-white/25 focus:outline-none"
+                    />
+                  </div>
+                `
+                    : ''
+                }
+              </div>
+
               <button type="submit" class="w-full bg-emous-lime text-black font-display font-extrabold text-xs sm:text-sm py-2.5 rounded-xl flyer-btn uppercase">
                 Drop Anonymous Card 🚀
               </button>
@@ -1507,7 +1685,10 @@
 
                   <div class="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-0.5 min-w-0">
                     <span class="w-1.5 h-1.5 rounded-full bg-emous-lime animate-pulse shrink-0"></span>
-                    <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[100px]">@${escapeHtml(currentHandle)}</span>
+                    <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[95px]">@${escapeHtml(currentHandle)}</span>
+                    <span title="${getStreetCred().tier}" class="bg-black text-emous-lime text-[9px] font-extrabold px-1.5 py-0.2 rounded-full shrink-0">
+                      ${getStreetCred().emoji} ${getStreetCred().score} Cred
+                    </span>
                     <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[10px] bg-black text-white px-1.5 py-0.5 rounded-full hover:bg-emous-pink shrink-0">
                       🎲
                     </button>
@@ -1706,33 +1887,91 @@
                         </div>
                       </div>
 
-                      <p style="color: ${textColor}" class="my-3.5 font-sans font-extrabold ${
-                        compact ? 'text-sm leading-snug' : 'text-base sm:text-lg leading-relaxed'
-                      } tracking-tight break-words">
-                        “${escapeHtml(post.content)}”
-                      </p>
+                      ${
+                        post.qaCard?.question
+                          ? `
+                        <div class="my-3 space-y-1.5">
+                          <div class="bg-black/80 text-white rounded-xl p-2.5 border-2 border-black">
+                            <span class="inline-block bg-emous-pink text-white text-[8px] font-display font-extrabold uppercase px-1.5 py-0.2 rounded mb-0.5">
+                              🤫 ANONYMOUS ASKED
+                            </span>
+                            <p class="font-sans font-bold text-xs">“${escapeHtml(post.qaCard.question)}”</p>
+                          </div>
+                          <div class="bg-emous-lime text-black rounded-xl p-2.5 border-2 border-black shadow-brutal">
+                            <span class="inline-block bg-black text-emous-yellow text-[8px] font-display font-extrabold uppercase px-1.5 py-0.2 rounded mb-0.5">
+                              ⚡ @${escapeHtml(post.authorHandle)} REPLIED
+                            </span>
+                            <p class="font-sans font-extrabold text-xs sm:text-sm">${escapeHtml(post.qaCard.reply)}</p>
+                          </div>
+                        </div>
+                      `
+                          : `
+                        <p style="color: ${textColor}" class="my-3.5 font-sans font-extrabold ${
+                              compact ? 'text-sm leading-snug' : 'text-base sm:text-lg leading-relaxed'
+                            } tracking-tight break-words">
+                          “${escapeHtml(post.content)}”
+                        </p>
+                      `
+                      }
+
+                      ${
+                        post.poll?.optionA?.text && post.poll?.optionB?.text
+                          ? (() => {
+                              const vA = post.poll.optionA.votes || 0;
+                              const vB = post.poll.optionB.votes || 0;
+                              const total = vA + vB;
+                              const pctA = total > 0 ? Math.round((vA / total) * 100) : 50;
+                              const pctB = total > 0 ? Math.round((vB / total) * 100) : 50;
+                              return `
+                              <div class="mb-2.5 space-y-1.5 bg-black/55 p-2 rounded-xl border-2 border-black">
+                                <button onclick="handleVotePoll('${post._id}', 'A')" class="w-full rounded-lg border-2 border-black px-2.5 py-1.5 text-left font-sans font-extrabold text-[11px] flex items-center justify-between ${
+                                  post.poll.myVote === 'A' ? 'bg-emous-yellow text-black' : 'bg-white text-black hover:bg-emous-lime'
+                                }">
+                                  <span class="truncate">${post.poll.myVote === 'A' ? '⚡ ' : ''}${escapeHtml(post.poll.optionA.text)}</span>
+                                  <span class="text-[10px] font-display shrink-0">${pctA}% (${vA})</span>
+                                </button>
+                                <button onclick="handleVotePoll('${post._id}', 'B')" class="w-full rounded-lg border-2 border-black px-2.5 py-1.5 text-left font-sans font-extrabold text-[11px] flex items-center justify-between ${
+                                  post.poll.myVote === 'B' ? 'bg-emous-yellow text-black' : 'bg-white text-black hover:bg-emous-lime'
+                                }">
+                                  <span class="truncate">${post.poll.myVote === 'B' ? '⚡ ' : ''}${escapeHtml(post.poll.optionB.text)}</span>
+                                  <span class="text-[10px] font-display shrink-0">${pctB}% (${vB})</span>
+                                </button>
+                              </div>
+                            `;
+                            })()
+                          : ''
+                      }
 
                       <div class="space-y-2 pt-1">
-                        <!-- Phase 4: Emoji Reactions Bar (🔥, 💀, 👀, ❤️) -->
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                          ${REACTION_LIST.map((r) => {
-                            const active = myRx.includes(r.type);
-                            const count = rx[r.type] || 0;
-                            return `
-                              <button
-                                onclick="handleReactPost('${post._id}', '${r.type}')"
-                                title="React with ${r.label}"
-                                class="reaction-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                                  active
-                                    ? 'bg-emous-yellow text-black'
-                                    : 'bg-black/80 text-white hover:bg-black'
-                                }"
-                              >
-                                <span>${r.emoji}</span>
-                                <span>${count}</span>
-                              </button>
-                            `;
-                          }).join('')}
+                        <!-- Phase 5: Single Emoji Reaction Bar + 💬 Whispers Thread Trigger -->
+                        <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            ${REACTION_LIST.map((r) => {
+                              const active = myRx[0] === r.type;
+                              const count = rx[r.type] || 0;
+                              return `
+                                <button
+                                  onclick="handleReactPost('${post._id}', '${r.type}')"
+                                  title="React with ${r.label} (1 reaction allowed per post)"
+                                  class="reaction-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                                    active
+                                      ? 'bg-emous-yellow text-black'
+                                      : 'bg-black/80 text-white hover:bg-black'
+                                  }"
+                                >
+                                  <span>${r.emoji}</span>
+                                  <span>${count}</span>
+                                </button>
+                              `;
+                            }).join('')}
+                          </div>
+
+                          <button
+                            onclick="state.activeCommentPostId = '${post._id}'; render();"
+                            class="bg-black/85 hover:bg-emous-lime hover:text-black text-emous-lime text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal"
+                          >
+                            💬 ${(post.commentsCount ?? post.comments?.length ?? 0)} Whispers
+                          </button>
                         </div>
 
                         <!-- Bottom Row: Icon-Only Action Pills (reveal label on hover) -->
@@ -1868,13 +2107,29 @@
                       <div class="bg-emous-surface rounded-2xl p-3.5 flyer-card flex flex-col justify-between gap-2.5">
                         <div class="flex items-center justify-between gap-2">
                           <span style="background-color: ${msg.isRead ? '#FFE600' : '#FF1E8E'}; color: ${msg.isRead ? '#0D0D11' : '#FFFFFF'}" class="text-[9px] font-display font-extrabold uppercase px-2 py-0.5 rounded-full border-2 border-black">
-                            ${msg.isRead ? '✉️ Opened' : '🔥 New Secret'}
+                            ${msg.burnAfterReading ? '💣 Flash Burn Note' : msg.isRead ? '✉️ Opened' : '🔥 New Secret'}
                           </span>
-                          <span class="text-[10px] font-bold text-neutral-400">${formatRelativeTime(msg.createdAt)} • 30d burn</span>
+                          <span class="bg-black text-emous-yellow text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-white/15">
+                            🔥 ${formatBurnCountdown(msg.createdAt)}
+                          </span>
                         </div>
 
                         <div style="background-color: ${pair.topCardBg}; color: ${pair.topCardText}" class="rounded-xl p-3 border-2 border-black shadow-brutal font-sans font-extrabold text-xs sm:text-sm leading-snug">
                           “${escapeHtml(msg.question)}”
+                        </div>
+
+                        <!-- Wow Feature #4: Anonymous Sender Hint Peek -->
+                        <div>
+                          ${
+                            state.revealedHints[msg._id]
+                              ? `<div class="bg-black/80 text-emous-lime text-[10px] font-bold px-2.5 py-1 rounded-lg border border-white/15 flex items-center justify-between">
+                                  <span>🔍 Clue: ${escapeHtml(msg.senderHint || '📱 Sent from Mobile Web • Night Owl')}</span>
+                                  <button onclick="state.revealedHints['${msg._id}']=false; render();" class="text-neutral-400 text-[9px]">Hide</button>
+                                </div>`
+                              : `<button onclick="state.revealedHints['${msg._id}']=true; render();" class="text-[10px] font-extrabold text-emous-yellow underline">
+                                  🔍 Peek Anonymous Sender Clue
+                                </button>`
+                          }
                         </div>
 
                         ${
@@ -1993,6 +2248,9 @@
                     <button onclick="handleSaveStoryReply(true)" class="w-full bg-emous-pink text-white font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase">
                       📸 Download 9:16 Story PNG
                     </button>
+                    <button onclick="handleDropQaToPublicFeed()" class="w-full bg-emous-yellow text-black font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase">
+                      🔥 Publish Q&A to Public Feed
+                    </button>
                     <button onclick="handleSaveStoryReply(false)" class="w-full bg-emous-lime text-black font-display font-extrabold text-[10px] py-2 px-3 rounded-xl flyer-btn uppercase">
                       Save Reply Only
                     </button>
@@ -2001,6 +2259,74 @@
               </div>
             </div>
           `
+              : ''
+          }
+
+          <!-- WOW FEATURE #2: ANONYMOUS WHISPER COMMENTS MODAL -->
+          ${
+            state.activeCommentPostId
+              ? (() => {
+                  const commentPost = state.posts.find((p) => p._id === state.activeCommentPostId);
+                  if (!commentPost) return '';
+                  const comments = commentPost.comments || [];
+                  return `
+                    <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 overflow-y-auto">
+                      <div class="bg-emous-surface w-full max-w-md rounded-2xl p-4 flyer-card space-y-3 my-auto">
+                        <div class="flex items-center justify-between">
+                          <span class="bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full border-2 border-black">
+                            💬 ANONYMOUS WHISPER THREAD (${escapeHtml(commentPost.tag)})
+                          </span>
+                          <button onclick="state.activeCommentPostId = null; render();" class="bg-black text-white px-2.5 py-1 rounded-lg border-2 border-white/20 text-xs font-bold">✕</button>
+                        </div>
+
+                        <div class="bg-black/75 rounded-xl p-3 border-2 border-black">
+                          <p class="text-[10px] font-extrabold text-emous-lime mb-0.5">🎭 @${escapeHtml(commentPost.authorHandle)} (OP)</p>
+                          <p class="font-sans font-bold text-xs text-white">“${escapeHtml(commentPost.content)}”</p>
+                        </div>
+
+                        <div class="space-y-1.5 max-h-56 overflow-y-auto">
+                          ${
+                            comments.length === 0
+                              ? `<p class="text-xs text-neutral-400 text-center py-3">No whisper replies yet. Be the first!</p>`
+                              : comments
+                                  .map(
+                                    (c) => `
+                                  <div class="bg-black/60 rounded-xl p-2.5 border border-white/15 flex items-start justify-between gap-2">
+                                    <div>
+                                      <span class="text-[10px] font-extrabold text-emous-yellow">
+                                        🎭 @${escapeHtml(c.authorHandle)} ${
+                                      c.isOp
+                                        ? `<span class="bg-emous-pink text-white text-[8px] px-1.5 py-0.2 rounded-full ml-1">👑 OP</span>`
+                                        : ''
+                                    }
+                                      </span>
+                                      <p class="text-xs font-bold text-white mt-0.5">${escapeHtml(c.text)}</p>
+                                    </div>
+                                    <span class="text-[9px] text-neutral-400 font-bold shrink-0">${formatRelativeTime(c.createdAt)}</span>
+                                  </div>
+                                `
+                                  )
+                                  .join('')
+                          }
+                        </div>
+
+                        <form onsubmit="handleAddWhisperComment(event)" class="flex gap-1.5">
+                          <input
+                            type="text"
+                            maxlength="180"
+                            value="${escapeHtml(state.commentDraft)}"
+                            oninput="state.commentDraft = this.value"
+                            placeholder="Whisper an anonymous reply..."
+                            class="flex-1 bg-black text-white rounded-xl px-3 py-2 border-2 border-white/25 text-xs font-bold focus:outline-none"
+                          />
+                          <button type="submit" class="bg-emous-lime text-black font-display font-extrabold text-xs px-3.5 py-2 rounded-xl flyer-btn uppercase">
+                            Reply
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  `;
+                })()
               : ''
           }
         </div>

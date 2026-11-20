@@ -711,6 +711,71 @@ export interface TrendingPhraseItem {
   score: number;
 }
 
+export interface PostPollOptionDTO {
+  id: 'A' | 'B';
+  text: string;
+  votes: number;
+}
+
+export interface PostPollDTO {
+  optionA: PostPollOptionDTO;
+  optionB: PostPollOptionDTO;
+  totalVotes: number;
+  myVote?: 'A' | 'B' | null;
+}
+
+export interface StreetCredDTO {
+  score: number;
+  tier: string;
+  emoji: string;
+  nextTierScore: number;
+}
+
+export function calculateStreetCred(params: {
+  postsCount?: number;
+  reactionsReceived?: number;
+  commentsReceived?: number;
+  inboxReceived?: number;
+}): StreetCredDTO {
+  const score =
+    25 +
+    (params.postsCount || 0) * 15 +
+    (params.reactionsReceived || 0) * 10 +
+    (params.commentsReceived || 0) * 8 +
+    (params.inboxReceived || 0) * 12;
+
+  if (score >= 300) {
+    return {
+      score,
+      tier: 'Emous Legend',
+      emoji: '👑',
+      nextTierScore: 500,
+    };
+  }
+  if (score >= 120) {
+    return {
+      score,
+      tier: 'Neon Phantom',
+      emoji: '⚡',
+      nextTierScore: 300,
+    };
+  }
+  if (score >= 50) {
+    return {
+      score,
+      tier: 'Street Confessor',
+      emoji: '🔥',
+      nextTierScore: 120,
+    };
+  }
+  return {
+    score,
+    tier: 'Shadow Rookie',
+    emoji: '🎭',
+    nextTierScore: 50,
+  };
+}
+
 export interface PostDTO {
   _id: string;
   authorHandle: string;
@@ -729,6 +794,11 @@ export interface PostDTO {
   myReactions: ReactionType[];
   comments?: PostCommentDTO[];
   commentsCount?: number;
+  poll?: PostPollDTO;
+  qaCard?: {
+    question: string;
+    reply: string;
+  };
   flagsCount: number;
   isFlaggedByMe?: boolean;
   isHidden: boolean;

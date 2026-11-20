@@ -67,6 +67,14 @@ export interface LocalPostDoc {
     isOp?: boolean;
     createdAt: string;
   }[];
+  poll?: {
+    optionA: { text: string; votes: number; votedBy: string[] };
+    optionB: { text: string; votes: number; votedBy: string[] };
+  };
+  qaCard?: {
+    question: string;
+    reply: string;
+  };
   flagsCount: number;
   flaggedBy: string[];
   isHidden: boolean;
@@ -290,6 +298,10 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 14, skull: 8, eyes: 5, heart: 3 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      poll: {
+        optionA: { text: 'Skip for Tacos 🌮', votes: 38, votedBy: [] },
+        optionB: { text: 'Join Standup 💻', votes: 7, votedBy: [] },
+      },
       comments: [
         {
           _id: createId(),
@@ -373,6 +385,10 @@ export async function seedInitialDataIfEmpty() {
       },
       reactions: { fire: 9, skull: 27, eyes: 7, heart: 4 },
       reactedBy: { fire: [], skull: [], eyes: [], heart: [] },
+      poll: {
+        optionA: { text: 'Take Profit Now 💰', votes: 29, votedBy: [] },
+        optionB: { text: 'Diamond Hands 💎', votes: 19, votedBy: [] },
+      },
       comments: [],
       flagsCount: 0,
       flaggedBy: [],

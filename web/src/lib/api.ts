@@ -9,6 +9,7 @@ import {
   POPULAR_TAGS,
   PostCommentDTO,
   PostDTO,
+  PostPollDTO,
   ReactionCounts,
   ReactionType,
   TrendingPhraseItem,
@@ -446,6 +447,8 @@ export async function createPost(payload: {
   authorHandle?: string;
   lat?: number;
   lng?: number;
+  poll?: { optionA: string; optionB: string };
+  qaCard?: { question: string; reply: string };
 }): Promise<PostDTO> {
   const deviceId = getOrCreateDeviceId();
   const analyzed = classifyPostTopics(payload.content, payload.tag);
@@ -500,6 +503,16 @@ export async function createPost(payload: {
     myReactions: [],
     comments: [],
     commentsCount: 0,
+    poll:
+      payload.poll?.optionA && payload.poll?.optionB
+        ? {
+            optionA: { id: 'A', text: payload.poll.optionA, votes: 0 },
+            optionB: { id: 'B', text: payload.poll.optionB, votes: 0 },
+            totalVotes: 0,
+            myVote: null,
+          }
+        : undefined,
+    qaCard: payload.qaCard,
     flagsCount: 0,
     isFlaggedByMe: false,
     isHidden: false,
@@ -546,6 +559,23 @@ export async function reactToPost(
     body: JSON.stringify({ deviceId, type }),
   });
   if (!res.ok) throw new Error('Failed to react to post');
+  return res.json();
+}
+
+export async function voteOnPostPoll(
+  postId: string,
+  option: 'A' | 'B'
+): Promise<{ _id: string; poll: PostPollDTO }> {
+  const deviceId = getOrCreateDeviceId();
+  const res = await fetch(`${API_BASE}/posts/${postId}/poll`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-device-id': deviceId,
+    },
+    body: JSON.stringify({ deviceId, option }),
+  });
+  if (!res.ok) throw new Error('Failed to vote on poll');
   return res.json();
 }
 
@@ -669,7 +699,8 @@ export async function fetchInbox(handle: string): Promise<{
 export async function sendAnonymousInboxMessage(
   recipientHandle: string,
   question: string,
-  themeId?: string
+  themeId?: string,
+  burnAfterReading?: boolean
 ): Promise<{
   success: boolean;
   message: string;
@@ -685,7 +716,12 @@ export async function sendAnonymousInboxMessage(
           'Content-Type': 'application/json',
           'x-device-id': deviceId,
         },
-        body: JSON.stringify({ question, themeId, deviceId }),
+        body: JSON.stringify({
+          question,
+          themeId,
+          burnAfterReading: Boolean(burnAfterReading),
+          deviceId,
+        }),
       }
     );
     if (res.ok) {

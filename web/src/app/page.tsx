@@ -31,6 +31,7 @@ import {
 import {
   ALL_BACKGROUNDS,
   BRAND,
+  calculateStreetCred,
   CardBackground,
   classifyPostTopics,
   CURATED_GRADIENTS,
@@ -56,6 +57,7 @@ import {
   replyToInboxMessage,
   rerollHandle,
   shuffleCardBackground,
+  voteOnPostPoll,
 } from '@/lib/api-bundle';
 
 function formatRelativeTime(iso: string): string {
@@ -392,11 +394,14 @@ export default function EmousHomeApp() {
   );
   const [commentText, setCommentText] = useState('');
 
-  // Post Composer + 🎲 Card Shuffler + Live Dynamic Tag Preview
+  // Post Composer + 🎲 Card Shuffler + Live Dynamic Tag Preview + Wow Feature #5 (2-Option Polls)
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [draftContent, setDraftContent] = useState('');
   const [draftTagMode, setDraftTagMode] = useState<string>('AUTO');
   const [draftBg, setDraftBg] = useState<CardBackground>(CURATED_GRADIENTS[0]);
+  const [enablePollDraft, setEnablePollDraft] = useState(false);
+  const [pollOptionA, setPollOptionA] = useState('');
+  const [pollOptionB, setPollOptionB] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [isShuffling, setIsShuffling] = useState(false);
 
@@ -453,6 +458,30 @@ export default function EmousHomeApp() {
   const currentHandle = demoGoldenWizardMode
     ? 'GoldenWizard'
     : identity?.handle || 'GoldenWizard';
+
+  // Wow Feature #6: Street Cred & Karma Score calculated from user's activity
+  const myPosts = posts.filter(
+    (p) => p.authorHandle.toLowerCase() === currentHandle.toLowerCase()
+  );
+  const myReactionsReceived = myPosts.reduce(
+    (sum, p) =>
+      sum +
+      (p.reactions?.fire || 0) +
+      (p.reactions?.skull || 0) +
+      (p.reactions?.eyes || 0) +
+      (p.reactions?.heart || 0),
+    0
+  );
+  const myCommentsReceived = myPosts.reduce(
+    (sum, p) => sum + (p.commentsCount ?? p.comments?.length ?? 0),
+    0
+  );
+  const streetCred = calculateStreetCred({
+    postsCount: myPosts.length,
+    reactionsReceived: myReactionsReceived,
+    commentsReceived: myCommentsReceived,
+    inboxReceived: inboxMessages.length,
+  });
 
   // Live NLP preview for the Post Composer
   const liveComposerClassification = classifyPostTopics(
@@ -720,6 +749,8 @@ export default function EmousHomeApp() {
     if (!draftContent.trim()) return;
     setIsPublishing(true);
     try {
+      const hasValidPoll =
+        enablePollDraft && pollOptionA.trim() && pollOptionB.trim();
       const created = await createPost({
         content: draftContent.trim(),
         tag:
@@ -730,6 +761,9 @@ export default function EmousHomeApp() {
         authorHandle: currentHandle,
         lat: coords.lat,
         lng: coords.lng,
+        poll: hasValidPoll
+          ? { optionA: pollOptionA.trim(), optionB: pollOptionB.trim() }
+          : undefined,
       });
       setPosts((prev) => {
         const next = [created, ...prev];
@@ -748,6 +782,9 @@ export default function EmousHomeApp() {
       }
       setDraftContent('');
       setDraftTagMode('AUTO');
+      setEnablePollDraft(false);
+      setPollOptionA('');
+      setPollOptionB('');
       setIsComposerOpen(false);
       loadTrending();
       showToast(
@@ -760,7 +797,7 @@ export default function EmousHomeApp() {
     }
   };
 
-  // Wow Feature #1: Drop an Anonymous Inbox Q&A Directly to the Public Visual Feed!
+  // Wow Feature #1: Drop an Anonymous Inbox Q&A Directly to the Public Visual Feed as a Dual Q&A Card!
   const handleDropQaToPublicFeed = async () => {
     if (!activeStoryMsg) return;
     const cleanReply = replyText.trim() || '🤫🔥';
@@ -778,6 +815,10 @@ export default function EmousHomeApp() {
         authorHandle: currentHandle,
         lat: coords.lat,
         lng: coords.lng,
+        qaCard: {
+          question: activeStoryMsg.question,
+          reply: cleanReply,
+        },
       });
       setPosts((prev) => [created, ...prev]);
       setActiveStoryMsg(null);
@@ -788,6 +829,40 @@ export default function EmousHomeApp() {
     } finally {
       setIsSavingReply(false);
     }
+  };
+
+  // Wow Feature #5: Vote on a 2-Option Poll on a Feed Card
+  const handleVotePoll = async (post: PostDTO, option: 'A' | 'B') => {
+    if (!post.poll) return;
+    // 1. Optimistic update
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p._id !== post._id || !p.poll) return p;
+        const prevVote = p.poll.myVote;
+        let votesA = p.poll.optionA.votes;
+        let votesB = p.poll.optionB.votes;
+        if (prevVote === 'A') votesA = Math.max(0, votesA - 1);
+        if (prevVote === 'B') votesB = Math.max(0, votesB - 1);
+        if (option === 'A') votesA += 1;
+        if (option === 'B') votesB += 1;
+        return {
+          ...p,
+          poll: {
+            optionA: { ...p.poll.optionA, votes: votesA },
+            optionB: { ...p.poll.optionB, votes: votesB },
+            totalVotes: votesA + votesB,
+            myVote: option,
+          },
+        };
+      })
+    );
+
+    try {
+      const res = await voteOnPostPoll(post._id, option);
+      setPosts((prev) =>
+        prev.map((p) => (p._id === post._id ? { ...p, poll: res.poll } : p))
+      );
+    } catch {}
   };
 
   // Wow Feature #2: Submit an Anonymous Whisper Comment under a post
@@ -953,8 +1028,15 @@ export default function EmousHomeApp() {
 
               <div className="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-1 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emous-lime animate-pulse shrink-0" />
-                <span className="text-[11px] sm:text-xs font-extrabold text-emous-yellow truncate max-w-[100px] sm:max-w-[145px]">
+                <span className="text-[11px] sm:text-xs font-extrabold text-emous-yellow truncate max-w-[95px] sm:max-w-[140px]">
                   @{currentHandle}
+                </span>
+                {/* Wow Feature #6: Street Cred & Karma Badge */}
+                <span
+                  title={`${streetCred.tier} • ${streetCred.score} Street Cred (Next tier at ${streetCred.nextTierScore})`}
+                  className="bg-black text-emous-lime text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emous-lime/40 shrink-0"
+                >
+                  {streetCred.emoji} {streetCred.score} Cred
                 </span>
                 <button
                   onClick={async () => {
@@ -1303,13 +1385,77 @@ export default function EmousHomeApp() {
                       </div>
                     </div>
 
-                    {/* Center: Bold 300-Char Confession Copy */}
-                    <p
-                      style={{ color: textColor }}
-                      className="my-4 sm:my-5 font-sans font-extrabold text-[15px] sm:text-lg md:text-xl leading-relaxed tracking-tight break-words z-10 drop-shadow-sm"
-                    >
-                      “{post.content}”
-                    </p>
+                    {/* Center: Wow Feature #1 Split Q&A Card OR Bold 300-Char Confession Copy */}
+                    {post.qaCard?.question ? (
+                      <div className="my-3.5 space-y-2 z-10">
+                        <div className="bg-black/80 text-white rounded-2xl p-3 border-2 border-black">
+                          <span className="inline-block bg-emous-pink text-white text-[9px] font-display font-extrabold uppercase px-2 py-0.5 rounded mb-1">
+                            🤫 ANONYMOUS ASKED
+                          </span>
+                          <p className="font-sans font-bold text-xs sm:text-sm">
+                            “{post.qaCard.question}”
+                          </p>
+                        </div>
+                        <div className="bg-emous-lime text-black rounded-2xl p-3 border-2 border-black shadow-brutal">
+                          <span className="inline-block bg-black text-emous-yellow text-[9px] font-display font-extrabold uppercase px-2 py-0.5 rounded mb-1">
+                            ⚡ @{post.authorHandle} REPLIED
+                          </span>
+                          <p className="font-sans font-extrabold text-sm sm:text-base">
+                            {post.qaCard.reply}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p
+                        style={{ color: textColor }}
+                        className="my-4 sm:my-5 font-sans font-extrabold text-[15px] sm:text-lg md:text-xl leading-relaxed tracking-tight break-words z-10 drop-shadow-sm"
+                      >
+                        “{post.content}”
+                      </p>
+                    )}
+
+                    {/* Wow Feature #5: Interactive 2-Option Anonymous Hot-Take Poll */}
+                    {post.poll?.optionA?.text && post.poll?.optionB?.text && (
+                      <div className="mb-3 space-y-1.5 z-10 bg-black/55 p-2.5 rounded-2xl border-2 border-black">
+                        {(['A', 'B'] as const).map((optKey) => {
+                          const opt =
+                            optKey === 'A'
+                              ? post.poll!.optionA
+                              : post.poll!.optionB;
+                          const total = post.poll!.totalVotes || 0;
+                          const pct =
+                            total > 0
+                              ? Math.round((opt.votes / total) * 100)
+                              : 50;
+                          const isVoted = post.poll!.myVote === optKey;
+                          return (
+                            <button
+                              key={optKey}
+                              onClick={() => handleVotePoll(post, optKey)}
+                              className={`w-full relative overflow-hidden rounded-xl border-2 border-black px-3 py-2 text-left font-sans font-extrabold text-xs flex items-center justify-between transition-transform active:scale-98 ${
+                                isVoted
+                                  ? 'bg-emous-yellow text-black'
+                                  : 'bg-white/95 text-black hover:bg-emous-lime'
+                              }`}
+                            >
+                              <div
+                                style={{ width: `${pct}%` }}
+                                className={`absolute inset-y-0 left-0 opacity-25 pointer-events-none ${
+                                  isVoted ? 'bg-emous-pink' : 'bg-black'
+                                }`}
+                              />
+                              <span className="relative z-10 truncate pr-2">
+                                {isVoted ? '⚡ ' : ''}
+                                {opt.text}
+                              </span>
+                              <span className="relative z-10 text-[11px] font-display shrink-0">
+                                {pct}% ({opt.votes})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Exclusive Single Reaction Row (1 User = Max 1 Reaction Per Post) + Whisper Thread Count */}
                     <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 z-10">
@@ -1855,6 +2001,47 @@ export default function EmousHomeApp() {
                 </div>
               </div>
 
+              {/* Wow Feature #5: Optional 2-Option Poll Builder in Composer */}
+              <div className="bg-black/60 rounded-2xl p-3 border-2 border-black space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase text-emous-yellow">
+                    📊 Add 2-Option Hot-Take Poll (Optional)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEnablePollDraft((prev) => !prev)}
+                    className={`text-[10px] font-display font-extrabold px-2.5 py-1 rounded-lg border border-black uppercase ${
+                      enablePollDraft
+                        ? 'bg-emous-pink text-white'
+                        : 'bg-emous-surface text-neutral-300'
+                    }`}
+                  >
+                    {enablePollDraft ? '✕ Remove Poll' : '+ Attach Poll'}
+                  </button>
+                </div>
+
+                {enablePollDraft && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={pollOptionA}
+                      onChange={(e) => setPollOptionA(e.target.value)}
+                      placeholder="Option A (e.g. Quit Job 🏃)"
+                      className="bg-black text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/25 focus:outline-none focus:border-emous-lime"
+                    />
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={pollOptionB}
+                      onChange={(e) => setPollOptionB(e.target.value)}
+                      placeholder="Option B (e.g. Stay for Pay 💰)"
+                      className="bg-black text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/25 focus:outline-none focus:border-emous-lime"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
                 disabled={isPublishing || !draftContent.trim()}
@@ -2013,7 +2200,23 @@ export default function EmousHomeApp() {
                   </h3>
                 </div>
                 <button
-                  onClick={() => setActiveStoryMsg(null)}
+                  onClick={() => {
+                    if (
+                      activeStoryMsg.burnAfterReading &&
+                      !activeStoryMsg.isRead
+                    ) {
+                      flagInboxMessage(activeStoryMsg._id, true).catch(
+                        () => {}
+                      );
+                      setInboxMessages((prev) =>
+                        prev.filter((m) => m._id !== activeStoryMsg._id)
+                      );
+                      showToast(
+                        '💣 Flash Burn Note self-destructed after reading!'
+                      );
+                    }
+                    setActiveStoryMsg(null);
+                  }}
                   className="bg-black text-white p-2 rounded-xl border-2 border-white/20"
                 >
                   <X className="w-5 h-5" />

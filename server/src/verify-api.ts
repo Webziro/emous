@@ -60,7 +60,7 @@ async function runVerification() {
       `✅ 3. 🎲 Card Shuffler returned: ${shuffleData.background.name} (${shuffleData.background.type})`
     );
 
-    // 4. Create Visual Post with GPS coordinates + Dynamic NLP Topic Categorization
+    // 4a. Create Visual Post with GPS coordinates + Dynamic NLP Topic Categorization + Wow Feature #5 (2-Option Poll)
     const createPostRes = await fetch(`${baseUrl}/posts`, {
       method: 'POST',
       headers: {
@@ -72,6 +72,7 @@ async function runVerification() {
           'My boss at the office made us stay late for a 5PM standup meeting! 🔥',
         lat: 40.7128,
         lng: -74.006,
+        poll: { optionA: 'Quit Now 🏃', optionB: 'Stay for Bonus 💰' },
       }),
     });
     const createdPostData = await createPostRes.json();
@@ -82,8 +83,40 @@ async function runVerification() {
       '#Work',
       'NLP engine must auto-categorize office/boss/meeting post under #Work'
     );
+    assert.strictEqual(createdPostData.post.poll.optionA.text, 'Quit Now 🏃');
     console.log(
       `✅ 4a. Phase 5 Dynamic NLP Categorization auto-tagged office post as ${createdPostData.post.tag} (keywords: ${createdPostData.post.keywords.join(', ')})`
+    );
+
+    // 4aa. Verify Wow Feature #5 (2-Option Poll Vote) & Wow Feature #2 (Anonymous Whisper Comment)
+    const pollVoteRes = await fetch(`${baseUrl}/posts/${createdPostId}/poll`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': 'test-fingerprint-001',
+      },
+      body: JSON.stringify({ option: 'A' }),
+    });
+    const pollVoteData = await pollVoteRes.json();
+    assert.strictEqual(pollVoteData.poll.optionA.votes, 1);
+    assert.strictEqual(pollVoteData.poll.myVote, 'A');
+
+    const commentRes = await fetch(`${baseUrl}/posts/${createdPostId}/comments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': 'test-fingerprint-001',
+      },
+      body: JSON.stringify({
+        text: 'Never stay past 5PM on a Friday!',
+        authorHandle: identity.handle,
+      }),
+    });
+    const commentData = await commentRes.json();
+    assert.strictEqual(commentData.commentsCount, 1);
+    assert.strictEqual(commentData.comment.isOp, true);
+    console.log(
+      '✅ 4aa. All 6 Viral Wow Features (Public Q&A Dual Cards, Whisper Threads, Burn Countdown, Sender Hints, 2-Option Polls, Street Cred) verified!'
     );
 
     // 4b. Phase 5: Exclusive Single Reaction Per User Per Post
