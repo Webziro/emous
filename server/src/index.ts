@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
-import { connectDatabase } from './db';
+import { connectDatabase, isUsingMongo } from './db';
 import { identityRouter } from './routes/identity';
 import { postsRouter } from './routes/posts';
 import { inboxRouter } from './routes/inbox';
@@ -49,6 +49,7 @@ export function createApp() {
       status: 'ok',
       brand: BRAND.name,
       domain: BRAND.domain,
+      dbMode: isUsingMongo() ? 'mongodb-atlas' : 'local-ephemeral',
       timestamp: new Date().toISOString(),
     });
   });

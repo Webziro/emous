@@ -51,6 +51,91 @@
   ],
   "posts": [
     {
+      "_id": "49378ba00a884d8fb011f8c1",
+      "authorDeviceId": "test-fingerprint-001",
+      "authorHandle": "CrimsonComet",
+      "content": "My boss at the office made us stay late for a 5PM standup meeting! 🔥",
+      "tag": "#Work",
+      "tagLower": "#work",
+      "categories": [
+        "#Work"
+      ],
+      "keywords": [
+        "office",
+        "boss",
+        "meeting",
+        "standup"
+      ],
+      "background": {
+        "id": "grad-neon-riot",
+        "type": "gradient",
+        "name": "Neon Riot",
+        "value": "linear-gradient(135deg, #FF1E8E 0%, #7928CA 100%)",
+        "colors": [
+          "#FF1E8E",
+          "#7928CA"
+        ],
+        "textColor": "#FFFFFF",
+        "badgeBg": "#CCFF00",
+        "badgeText": "#0D0D11"
+      },
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          -74.006,
+          40.7128
+        ],
+        "label": "Near You"
+      },
+      "reactions": {
+        "fire": 0,
+        "skull": 1,
+        "eyes": 0,
+        "heart": 0
+      },
+      "reactedBy": {
+        "fire": [],
+        "skull": [
+          "test-fingerprint-001"
+        ],
+        "eyes": [],
+        "heart": []
+      },
+      "comments": [
+        {
+          "_id": "209b3a840f804bafb47b8e86",
+          "authorHandle": "CrimsonComet",
+          "authorDeviceId": "test-fingerprint-001",
+          "text": "Never stay past 5PM on a Friday!",
+          "isOp": true,
+          "createdAt": "2026-11-21T12:59:07.613Z"
+        }
+      ],
+      "poll": {
+        "optionA": {
+          "text": "Quit Now 🏃",
+          "votes": 1,
+          "votedBy": [
+            "test-fingerprint-001"
+          ]
+        },
+        "optionB": {
+          "text": "Stay for Bonus 💰",
+          "votes": 0,
+          "votedBy": []
+        }
+      },
+      "flagsCount": 3,
+      "flaggedBy": [
+        "flagger-user-1",
+        "flagger-user-2",
+        "flagger-user-3"
+      ],
+      "isHidden": true,
+      "createdAt": "2026-11-21T12:59:07.587Z",
+      "updatedAt": "2026-11-21T12:59:07.726Z"
+    },
+    {
       "_id": "f36fb30e1ab34c489287f9d7",
       "authorDeviceId": "test-fingerprint-001",
       "authorHandle": "CrimsonComet",
@@ -799,6 +884,23 @@
     }
   ],
   "inbox": [
+    {
+      "_id": "4df4b76b29f54c3aa1430750",
+      "recipientHandle": "GoldenWizard",
+      "recipientHandleLower": "goldenwizard",
+      "question": "Who is your secret crush at the studio? 👀",
+      "themeId": "story-yellow-pink",
+      "isRead": true,
+      "burnAfterReading": false,
+      "senderHint": "💻 Sent from Web Browser • ⚡ Daytime Lurker",
+      "flagsCount": 0,
+      "flaggedBy": [],
+      "isHidden": false,
+      "createdAt": "2026-11-21T12:59:07.771Z",
+      "updatedAt": "2026-11-21T12:59:07.781Z",
+      "reply": "Never telling 🤫🔥",
+      "repliedAt": "2026-11-21T12:59:07.781Z"
+    },
     {
       "_id": "630df391773748fd9350f0b9",
       "recipientHandle": "GoldenWizard",

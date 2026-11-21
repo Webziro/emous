@@ -157,30 +157,10 @@ export default function AskReceiverPage() {
 
       {/* Main Viral Receiver Card */}
       <main className="w-full max-w-lg mx-auto px-3 sm:px-4 my-auto py-3">
-        {/* Bubble Badge Header */}
-        <div className="mb-4 text-center">
-          <div className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs uppercase tracking-widest px-3 py-1 rounded-full border-2 border-black shadow-brutal mb-2.5 -rotate-1">
-            🤫 SECRET CONFESSION DROPBOX
-          </div>
-
-          <div className="bg-white text-black rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 flyer-card relative overflow-hidden">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emous-pink border-2 border-black flex items-center justify-center text-white font-display font-extrabold text-sm sm:text-lg shadow-brutal shrink-0">
-                @{targetHandle.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="text-left min-w-0 flex-1 overflow-hidden">
-                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-neutral-600 truncate">
-                  Zero-Download Secret Link
-                </p>
-                <h1 className="font-display font-extrabold text-sm sm:text-xl leading-snug text-black flex flex-wrap items-center gap-1">
-                  <span>Ask</span>
-                  <span className="bg-emous-lime px-1.5 py-0.5 rounded-md border-2 border-black inline-block max-w-full truncate">
-                    @{targetHandle}
-                  </span>
-                  <span>anything!</span>
-                </h1>
-              </div>
-            </div>
+        {/* Compact Streetwear Badge Header */}
+        <div className="mb-3 text-center">
+          <div className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs uppercase tracking-widest px-3.5 py-1 rounded-full border-2 border-black shadow-brutal">
+            🤫 SECRET CONFESSION TO @{targetHandle.toUpperCase()}
           </div>
         </div>
 
@@ -301,43 +281,6 @@ export default function AskReceiverPage() {
           </Link>
         </div>
       </main>
-
-      {/* Screen 3 Requirement: Sticky Growth Loop Footer */}
-      <footer className="fixed bottom-0 inset-x-0 z-40 bg-emous-surface/95 backdrop-blur-md border-t-4 border-black px-4 py-3">
-        <div className="max-w-lg mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
-          <div className="text-center sm:text-left">
-            <p className="text-xs sm:text-sm font-extrabold text-emous-lime flex items-center justify-center sm:justify-start gap-1.5">
-              <Sparkles className="w-4 h-4 text-emous-yellow shrink-0" />
-              <span>{BRAND.growthFooterText}</span>
-            </p>
-            {senderHandle && (
-              <p className="text-[11px] text-neutral-300 font-medium">
-                Your instant handle{' '}
-                <span className="text-emous-yellow font-bold">
-                  @{senderHandle}
-                </span>{' '}
-                is ready!
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href="/?tab=inbox"
-              className="bg-emous-yellow text-black font-display font-extrabold text-xs px-3.5 py-2 rounded-xl flyer-btn uppercase"
-            >
-              Claim My Link 🔗
-            </Link>
-            <Link
-              href="/?tab=inbox"
-              className="bg-black text-white border-2 border-white/30 hover:border-emous-pink text-[11px] font-bold px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emous-pink" />
-              <span>App Store / Play</span>
-            </Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

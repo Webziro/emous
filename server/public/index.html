@@ -288,6 +288,7 @@
       pollOptionA: '',
       pollOptionB: '',
       activeCommentPostId: null,
+      activeSharePostId: null,
       commentDraft: '',
       revealedHints: {},
       askBurnAfterReading: false,
@@ -710,15 +711,27 @@
       if (mode === 'near' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            state.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            state.gpsStatus = 'Live Browser GPS (5-mi radius)';
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            state.coords = { lat, lng };
+            state.gpsStatus = `📍 Exact GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}) • 5-mi radius`;
             loadFeed();
           },
-          () => {
-            state.gpsStatus = 'Downtown Demo Hub (5-mi radius)';
+          async () => {
+            try {
+              const res = await fetch('https://ipapi.co/json/');
+              if (res.ok) {
+                const d = await res.json();
+                if (d.latitude && d.longitude) {
+                  state.coords = { lat: Number(d.latitude), lng: Number(d.longitude) };
+                  const locName = [d.city, d.country_code].filter(Boolean).join(', ');
+                  state.gpsStatus = `📍 ${locName || 'Detected Location'} (${Number(d.latitude).toFixed(3)}, ${Number(d.longitude).toFixed(3)}) • 5-mi radius`;
+                }
+              }
+            } catch (e) {}
             loadFeed();
           },
-          { timeout: 3500 }
+          { enableHighAccuracy: true, timeout: 6000 }
         );
       } else {
         loadFeed();
@@ -1435,26 +1448,8 @@
 
           <main class="w-full max-w-lg mx-auto px-3 my-auto py-2">
             <div class="mb-3 text-center">
-              <div class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border-2 border-black shadow-brutal mb-2">
-                🤫 SECRET CONFESSION DROPBOX
-              </div>
-
-              <div class="bg-white text-black rounded-2xl p-3 flyer-card overflow-hidden">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <div class="w-10 h-10 rounded-xl bg-emous-pink border-2 border-black flex items-center justify-center text-white font-display font-extrabold text-xs shadow-brutal shrink-0">
-                    @${escapeHtml(state.askTargetHandle.slice(0, 2).toUpperCase())}
-                  </div>
-                  <div class="text-left min-w-0 flex-1 overflow-hidden">
-                    <p class="text-[9px] font-bold uppercase tracking-wider text-neutral-500 truncate">Zero-Download Secret Link</p>
-                    <div class="font-display font-extrabold ${compact ? 'text-xs' : 'text-sm sm:text-base'} leading-snug text-black flex flex-wrap items-center gap-1">
-                      <span>Ask</span>
-                      <span class="bg-emous-lime px-1.5 py-0.5 rounded border-2 border-black inline-block max-w-full truncate">
-                        @${escapeHtml(state.askTargetHandle)}
-                      </span>
-                      <span>anything!</span>
-                    </div>
-                  </div>
-                </div>
+              <div class="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border-2 border-black shadow-brutal">
+                🤫 SECRET CONFESSION TO @${escapeHtml(state.askTargetHandle.toUpperCase())}
               </div>
             </div>
 
@@ -1518,53 +1513,7 @@
             </div>
           </main>
 
-          <footer class="${
-            state.mobileSimulator ? 'mt-3' : 'fixed bottom-0 inset-x-0 z-40'
-          } bg-emous-surface/95 backdrop-blur-md border-t-3 border-black px-3 py-2.5">
-            <div class="max-w-lg mx-auto flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <p class="text-[10px] font-extrabold text-emous-lime truncate">
-                  ✨ Get your own anonymous link!
-                </p>
-                <p class="text-[9px] text-neutral-300 font-bold truncate">
-                  Handle <span class="text-emous-yellow">@${escapeHtml(state.myHandle)}</span> ready
-                </p>
-              </div>
-              <button onclick="navigateToMain('inbox')" class="bg-emous-yellow text-black font-display font-extrabold text-[10px] px-2.5 py-1.5 rounded-lg flyer-btn uppercase shrink-0">
-                Get My Link 🔗
-              </button>
-            </div>
-          </footer>
-
           ${renderComposerModal()}
-        </div>
-      `;
-    }
-
-    function renderScrollingTagBar() {
-      const baseTags = ['All', ...(state.dynamicTags || POPULAR_TAGS)];
-      const marqueeItems = [...baseTags, ...baseTags];
-      const compact = isCompactMobile();
-      return `
-        <div class="tag-marquee-viewport no-scrollbar" title="Hover to pause dynamic scrolling tags">
-          <div class="tag-marquee-track">
-            ${marqueeItems
-              .map(
-                (tag) => `
-              <button
-                onclick="handleSelectTag('${tag}')"
-                class="shrink-0 ${compact ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-xs'} rounded-full font-display font-extrabold uppercase flyer-btn ${
-                  state.selectedTag === tag && !state.selectedPhrase
-                    ? 'bg-emous-yellow text-black'
-                    : 'bg-emous-surface text-white hover:bg-neutral-800'
-                }"
-              >
-                ${tag}
-              </button>
-            `
-              )
-              .join('')}
-          </div>
         </div>
       `;
     }
@@ -1585,18 +1534,18 @@
       return `
         <main class="max-w-2xl mx-auto px-3 pt-3.5">
           <div class="bg-emous-surface rounded-2xl flyer-card overflow-hidden">
-            <!-- Twitter (X) Style Header & Period Switcher -->
-            <div style="border-bottom: 1px solid rgba(255,255,255,0.1);" class="p-4 flex items-center justify-between gap-2 flex-wrap">
+            <!-- Emous Streetwear Brand Header on Twitter (X) Layout -->
+            <div style="border-bottom: 3px solid #000000;" class="bg-emous-lime text-black p-4 flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <h1 class="font-display font-extrabold text-lg text-white">
+                <span class="inline-block bg-black text-emous-yellow font-display font-extrabold text-[9px] uppercase px-2 py-0.5 rounded-full mb-0.5">
+                  🔥 EMOUS PULSE
+                </span>
+                <h1 class="font-display font-extrabold text-lg text-black leading-tight">
                   Trends for you
                 </h1>
-                <p class="text-[11px] text-neutral-400 font-bold">
-                  Frequently used topics & keywords on emous
-                </p>
               </div>
 
-              <div class="bg-black p-1 rounded-xl border border-white/15 inline-flex gap-1 shrink-0">
+              <div class="bg-black p-1 rounded-xl border-2 border-black inline-flex gap-1 shrink-0">
                 ${[
                   { id: '24h', label: '24h' },
                   { id: '7d', label: '7d' },
@@ -1607,7 +1556,7 @@
                   <button
                     onclick="state.trendingPeriod = '${p.id}'; loadTrending();"
                     class="px-2.5 py-1 rounded-lg font-display font-extrabold text-[10px] ${
-                      state.trendingPeriod === p.id ? 'bg-emous-lime text-black' : 'text-neutral-400 hover:text-white'
+                      state.trendingPeriod === p.id ? 'bg-emous-pink text-white' : 'text-neutral-300 hover:text-emous-yellow'
                     }"
                   >
                     ${p.label}
@@ -1618,7 +1567,7 @@
               </div>
             </div>
 
-            <!-- Twitter (X) Style Clean Vertical Trend Rows (1 Keyword per row, no boxes) -->
+            <!-- Twitter (X) Style Clean Vertical Trend Rows with Emous Neon Accents (1 Keyword per row, no boxes) -->
             <div>
               ${trendList
                 .map((item, idx) => {
@@ -1630,25 +1579,26 @@
                   const clickHandler = rawWord.startsWith('#')
                     ? `handleSelectTag('${escapeHtml(rawWord)}')`
                     : `handleSelectPhrase('${escapeHtml(rawWord.toLowerCase())}')`;
+                  const rankColor = idx === 0 ? 'text-emous-pink' : idx === 1 ? 'text-emous-lime' : idx === 2 ? 'text-emous-yellow' : 'text-neutral-400';
 
                   return `
                     <button
                       onclick="${clickHandler}"
-                      style="border-bottom: 1px solid rgba(255,255,255,0.08);"
-                      class="w-full text-left px-4 py-3 hover:bg-neutral-800 transition-colors flex items-start justify-between gap-3"
+                      style="border-bottom: 2px solid #000000;"
+                      class="w-full text-left px-4 py-3.5 hover:bg-neutral-800 transition-colors flex items-start justify-between gap-3"
                     >
                       <div class="min-w-0 space-y-0.5">
-                        <p class="text-[11px] text-neutral-400 font-bold">
-                          ${idx + 1} · ${escapeHtml(categoryName)} · Trending
+                        <p class="text-[11px] font-extrabold">
+                          <span class="${rankColor}">#${idx + 1}</span> · <span class="text-emous-yellow uppercase">${escapeHtml(categoryName)}</span> · <span class="text-emous-lime">Trending</span>
                         </p>
-                        <p class="font-sans font-extrabold text-sm sm:text-base text-white truncate">
+                        <p class="font-display font-extrabold text-sm sm:text-base text-white truncate">
                           ${escapeHtml(keywordDisplay)}
                         </p>
-                        <p class="text-[11px] text-neutral-400 font-bold">
-                          ${item.count} ${item.count === 1 ? 'confession' : 'confessions'}
+                        <p class="text-[11px] text-neutral-300 font-bold">
+                          <span class="text-emous-lime font-extrabold">${item.count}</span> ${item.count === 1 ? 'confession' : 'confessions'}
                         </p>
                       </div>
-                      <span class="text-neutral-500 text-xs font-extrabold px-1">•••</span>
+                      <span class="text-emous-pink text-xs font-extrabold px-1">•••</span>
                     </button>
                   `;
                 })
@@ -1673,40 +1623,39 @@
             <div class="max-w-5xl mx-auto px-3 py-2.5 ${
               compact ? 'space-y-2' : 'flex items-center justify-between gap-3'
             }">
-              <!-- Logo + Auto-Handle Pill + Active Notification Bell -->
-              <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2">
+              <!-- Logo + Auto-Handle Pill + Mobile-Responsive Active Notification Bell -->
+              <div class="flex items-center justify-between gap-1.5 min-w-0">
+                <div class="flex items-center gap-1.5 min-w-0 flex-1">
                   <button onclick="state.selectedTag='All'; state.selectedPhrase=''; navigateToMain('feed');" class="bg-emous-lime text-black font-display font-extrabold ${
-                    compact ? 'text-base px-2.5 py-0.5' : 'text-2xl px-3.5 py-1'
-                  } rounded-xl flyer-btn tracking-tight inline-flex items-center gap-1.5 shrink-0">
+                    compact ? 'text-sm px-2.5 py-0.5' : 'text-xl px-3.5 py-1'
+                  } rounded-xl flyer-btn tracking-tight inline-flex items-center gap-1 shrink-0">
                     <span>emous</span>
-                    <span class="text-[8px] bg-black text-emous-yellow px-1.5 py-0.5 rounded-full uppercase">LIVE</span>
                   </button>
 
-                  <div class="flex items-center gap-1.5 bg-emous-surface border-2 border-black rounded-full px-2.5 py-0.5 min-w-0">
+                  <div class="flex items-center gap-1 bg-emous-surface border-2 border-black rounded-full px-2 py-0.5 min-w-0 max-w-full overflow-hidden">
                     <span class="w-1.5 h-1.5 rounded-full bg-emous-lime animate-pulse shrink-0"></span>
-                    <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[95px]">@${escapeHtml(currentHandle)}</span>
+                    <span class="text-[10px] font-extrabold text-emous-yellow truncate max-w-[78px]">@${escapeHtml(currentHandle)}</span>
                     <span title="${getStreetCred().tier}" class="bg-black text-emous-lime text-[9px] font-extrabold px-1.5 py-0.2 rounded-full shrink-0">
-                      ${getStreetCred().emoji} ${getStreetCred().score} Cred
+                      ${getStreetCred().emoji} ${getStreetCred().score}
                     </span>
-                    <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[10px] bg-black text-white px-1.5 py-0.5 rounded-full hover:bg-emous-pink shrink-0">
+                    <button onclick="handleRerollIdentity()" title="Roll new random handle" class="text-[9px] bg-black text-white px-1 py-0.2 rounded-full hover:bg-emous-pink shrink-0">
                       🎲
                     </button>
                   </div>
                 </div>
 
-                <!-- Active Notification Bell Icon -->
+                <!-- Active Notification Bell Icon (Shrink-0 so it never overflows off right edge on mobile) -->
                 <button
                   onclick="state.isNotifOpen = !state.isNotifOpen; render();"
-                  class="px-2.5 py-1 rounded-xl flyer-btn relative inline-flex items-center gap-1 ${
+                  class="px-2 py-1 rounded-xl flyer-btn relative inline-flex items-center gap-1 shrink-0 ${
                     state.isNotifOpen ? 'bg-emous-yellow text-black' : 'bg-emous-surface text-white'
                   }"
-                  title="Live Notifications & Auto-Refresh"
+                  title="Live Notifications"
                 >
                   <span>🔔</span>
                   ${
                     state.unreadCount > 0
-                      ? `<span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1.5 rounded-full animate-bounce">${state.unreadCount}</span>`
+                      ? `<span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full animate-bounce">${state.unreadCount}</span>`
                       : ''
                   }
                 </button>
@@ -1759,11 +1708,11 @@
               <div class="max-w-md ml-auto mr-3 mb-2.5 bg-emous-surface rounded-2xl p-3.5 flyer-card space-y-2.5 border-2 border-black">
                 <div class="flex items-center justify-between">
                   <span class="bg-emous-lime text-black font-display font-extrabold text-[9px] px-2 py-0.5 rounded-full border border-black uppercase">
-                    🔔 LIVE NOTIFICATIONS • AUTO-REFRESH ON
+                    🔔 LIVE NOTIFICATIONS
                   </span>
                   <div class="flex items-center gap-1.5">
                     <button onclick="state.soundAlertsEnabled = !state.soundAlertsEnabled; render();" class="bg-black text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full">
-                      ${state.soundAlertsEnabled ? '🔊 Sound ON' : '🔇 Muted'}
+                      ${state.soundAlertsEnabled ? '🔊 On' : '🔇 Off'}
                     </button>
                     <button onclick="state.isNotifOpen = false; render();" class="bg-black text-white px-2 py-0.5 rounded-lg text-xs font-bold">✕</button>
                   </div>
@@ -1992,18 +1941,18 @@
                           </button>
 
                           <div class="flex items-center gap-1.5">
-                            <!-- Phase 4: Share Feed Card as 9:16 Story PNG -->
+                            <!-- Share Post Button (Opens Share Modal with Copy Link, WhatsApp, X, or Download PNG) -->
                             <button
-                              onclick="handleShareFeedCardStory('${post._id}')"
+                              onclick="state.activeSharePostId = '${post._id}'; render();"
                               class="card-action-pill bg-emous-yellow text-black hover:bg-emous-lime"
-                              aria-label="Share 9:16 Story"
+                              aria-label="Share Post"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0 stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
                                 <polyline points="16 6 12 2 8 6"/>
                                 <line x1="12" x2="12" y1="2" y2="15"/>
                               </svg>
-                              <span class="card-action-label">Share Story</span>
+                              <span class="card-action-label">Share</span>
                             </button>
 
                             <button
@@ -2062,9 +2011,9 @@
                   </button>
                 </div>
 
-                <h1 class="font-display font-extrabold ${compact ? 'text-base' : 'text-xl sm:text-2xl'} leading-tight">
+                <p class="font-display font-extrabold text-[11px] sm:text-sm leading-snug truncate">
                   🤫 Drop your link on your socials & get anonymous confessions!
-                </h1>
+                </p>
 
                 <div class="bg-white rounded-xl p-2.5 border-2 border-black shadow-brutal space-y-2">
                   <div class="flex items-center gap-1.5 overflow-hidden">
@@ -2323,6 +2272,78 @@
                             Reply
                           </button>
                         </form>
+                      </div>
+                    </div>
+                  `;
+                })()
+              : ''
+          }
+          <!-- SHARE POST OPTIONS MODAL (COPY LINK, WHATSAPP, X/TWITTER, OR 9:16 PNG) -->
+          ${
+            state.activeSharePostId
+              ? (() => {
+                  const sharePost = state.posts.find((p) => p._id === state.activeSharePostId);
+                  if (!sharePost) return '';
+                  const shareUrl = `https://emous.vercel.app/?post=${sharePost._id}`;
+                  const waText = encodeURIComponent(
+                    `🤫 Anonymous confession on emous:\n\n“${sharePost.content}”\n\nRead & confess anonymously: https://emous.vercel.app/ask/${sharePost.authorHandle}`
+                  );
+                  const xText = encodeURIComponent(
+                    `“${sharePost.content.slice(0, 180)}” — anonymous on #emous ${sharePost.tag}`
+                  );
+                  const xUrl = encodeURIComponent(`https://emous.vercel.app/ask/${sharePost.authorHandle}`);
+
+                  return `
+                    <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 overflow-y-auto">
+                      <div class="bg-emous-surface w-full max-w-md rounded-2xl p-4 flyer-card space-y-3 my-auto">
+                        <div class="flex items-center justify-between">
+                          <span class="bg-emous-lime text-black font-display font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full border-2 border-black">
+                            🚀 SHARE CONFESSION
+                          </span>
+                          <button onclick="state.activeSharePostId = null; render();" class="bg-black text-white px-2.5 py-1 rounded-lg border-2 border-white/20 text-xs font-bold">✕</button>
+                        </div>
+
+                        <div class="bg-black/75 rounded-xl p-3 border-2 border-black">
+                          <p class="text-[10px] font-extrabold text-emous-yellow mb-0.5">🎭 @${escapeHtml(sharePost.authorHandle)} • ${escapeHtml(sharePost.tag)}</p>
+                          <p class="font-sans font-bold text-xs text-white">“${escapeHtml(sharePost.content)}”</p>
+                        </div>
+
+                        <div class="space-y-2">
+                          <button
+                            onclick="navigator.clipboard?.writeText('“' + ${JSON.stringify(sharePost.content)} + '” — via @' + ${JSON.stringify(sharePost.authorHandle)} + ' on emous (${shareUrl})'); state.activeSharePostId = null; showToast('🔗 Link & confession copied to clipboard!');"
+                            class="w-full bg-emous-yellow text-black font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase"
+                          >
+                            🔗 Copy Post Link & Text
+                          </button>
+
+                          <div class="grid grid-cols-2 gap-2">
+                            <a
+                              href="https://api.whatsapp.com/send?text=${waText}"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onclick="state.activeSharePostId = null; render();"
+                              class="bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase text-center"
+                            >
+                              💬 WhatsApp
+                            </a>
+                            <a
+                              href="https://twitter.com/intent/tweet?text=${xText}&url=${xUrl}"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onclick="state.activeSharePostId = null; render();"
+                              class="bg-black text-white font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase text-center border-2 border-white/20"
+                            >
+                              𝕏 Share on X
+                            </a>
+                          </div>
+
+                          <button
+                            onclick="handleShareFeedCardStory('${sharePost._id}'); state.activeSharePostId = null;"
+                            class="w-full bg-black text-neutral-300 hover:text-white font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black uppercase"
+                          >
+                            📸 Download 9:16 Story Image (PNG)
+                          </button>
+                        </div>
                       </div>
                     </div>
                   `;
