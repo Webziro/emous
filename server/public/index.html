@@ -331,30 +331,73 @@
       }
     });
 
-    // Play a punchy 2-note Web Audio synth chime when a new secret message arrives
-    function playNotificationChime() {
-      if (!state.soundAlertsEnabled) return;
+    let sharedAudioCtx = null;
+
+    function getUnlockedAudioCtx() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
+        if (!AudioCtx) return null;
+        if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+        if (sharedAudioCtx.state === 'suspended') {
+          sharedAudioCtx.resume().catch(() => {});
+        }
+        return sharedAudioCtx;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    window.addEventListener('pointerdown', () => getUnlockedAudioCtx(), { passive: true });
+    window.addEventListener('keydown', () => getUnlockedAudioCtx(), { passive: true });
+
+    // Rings a multi-pulse metallic bell chime + vibrates phone when soundAlertsEnabled is true
+    function playNotificationChime() {
+      if (!state.soundAlertsEnabled) return;
+
+      // 1. Trigger Native Device Vibration
+      try {
+        if (navigator.vibrate) {
+          navigator.vibrate([180, 90, 220, 90, 260]);
+        }
+      } catch (e) {}
+
+      // 2. Visual Bell Shake
+      state.isBellRinging = true;
+      render();
+      setTimeout(() => {
+        state.isBellRinging = false;
+        render();
+      }, 1900);
+
+      // 3. Play 3-Note Metallic Bell Chime
+      try {
+        const ctx = getUnlockedAudioCtx();
+        if (!ctx) return;
         const now = ctx.currentTime;
 
-        const playNote = (freq, startTime, duration) => {
-          const osc = ctx.createOscillator();
+        const strikeBell = (freq, startTime, duration, vol = 0.28) => {
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, startTime);
-          gain.gain.setValueAtTime(0.18, startTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-          osc.connect(gain);
+          osc1.type = 'sine';
+          osc2.type = 'triangle';
+          osc1.frequency.setValueAtTime(freq, startTime);
+          osc2.frequency.setValueAtTime(freq * 2.0, startTime);
+          gain.gain.setValueAtTime(0.001, startTime);
+          gain.gain.linearRampToValueAtTime(vol, startTime + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0008, startTime + duration);
+          osc1.connect(gain);
+          osc2.connect(gain);
           gain.connect(ctx.destination);
-          osc.start(startTime);
-          osc.stop(startTime + duration);
+          osc1.start(startTime);
+          osc2.start(startTime);
+          osc1.stop(startTime + duration);
+          osc2.stop(startTime + duration);
         };
 
-        playNote(587.33, now, 0.16);        // D5
-        playNote(880.0, now + 0.14, 0.28);  // A5
+        strikeBell(880.0, now, 0.22, 0.3);           // A5
+        strikeBell(1174.66, now + 0.14, 0.26, 0.32); // D6
+        strikeBell(1318.51, now + 0.30, 0.45, 0.35); // E6
       } catch (e) {}
     }
 
@@ -543,7 +586,8 @@
       });
 
       try {
-        localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(finalPosts.slice(0, 60)));
+        // Feed posts NEVER burn — store permanently without truncation
+        localStorage.setItem(STORAGE_POSTS_CACHE_KEY, JSON.stringify(finalPosts));
       } catch (e) {}
 
       return finalPosts;
@@ -1651,15 +1695,17 @@
                   </div>
                 </div>
 
-                <!-- Active Notification Bell Icon (Shrink-0 so it never overflows off right edge on mobile) -->
+                <!-- Active Notification Bell Icon (Rings & Vibrates on new message) -->
                 <button
-                  onclick="state.isNotifOpen = !state.isNotifOpen; render();"
+                  onclick="getUnlockedAudioCtx(); state.isNotifOpen = !state.isNotifOpen; render();"
                   class="px-2 py-1 rounded-xl flyer-btn relative inline-flex items-center gap-1 shrink-0 ${
+                    state.isBellRinging ? 'bell-ringing bg-emous-pink text-white' : ''
+                  } ${
                     state.isNotifOpen ? 'bg-emous-yellow text-black' : 'bg-emous-surface text-white'
                   }"
-                  title="Live Notifications"
+                  title="Live Notifications (Rings & Vibrates when ON)"
                 >
-                  <span>🔔</span>
+                  <span class="${state.isBellRinging ? 'bell-ringing' : ''}">🔔</span>
                   ${
                     state.unreadCount > 0
                       ? `<span class="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full animate-bounce">${state.unreadCount}</span>`
@@ -1718,8 +1764,11 @@
                     🔔 LIVE NOTIFICATIONS
                   </span>
                   <div class="flex items-center gap-1.5">
-                    <button onclick="state.soundAlertsEnabled = !state.soundAlertsEnabled; render();" class="bg-black text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full">
+                    <button onclick="state.soundAlertsEnabled = !state.soundAlertsEnabled; if (state.soundAlertsEnabled) playNotificationChime(); render();" class="bg-black text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full">
                       ${state.soundAlertsEnabled ? '🔊 On' : '🔇 Off'}
+                    </button>
+                    <button onclick="playNotificationChime(); showToast('🔔 Testing Bell Ring & Vibration!');" class="bg-emous-yellow text-black text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-black">
+                      🔔 Test Ring
                     </button>
                     <button onclick="state.isNotifOpen = false; render();" class="bg-black text-white px-2 py-0.5 rounded-lg text-xs font-bold">✕</button>
                   </div>

@@ -283,6 +283,16 @@ button {
 .hover\:bg-black:hover { background-color: #000000; }
 .hover\:text-white:hover { color: #FFFFFF; }
 
+@keyframes bellRing {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  10%, 30%, 50%, 70%, 90% { transform: rotate(18deg) scale(1.18); }
+  20%, 40%, 60%, 80% { transform: rotate(-18deg) scale(1.18); }
+}
+
+.bell-ringing {
+  animation: bellRing 0.9s cubic-bezier(0.36, 0.07, 0.19, 0.97) 2;
+}
+
 /* Responsive Media Queries */
 @media (min-width: 640px) {
   .sm\:left-auto { left: auto; }

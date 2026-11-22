@@ -84,28 +84,76 @@ function formatBurnCountdown(createdAtIso: string): string {
   return `${days}d ${hours}h left`;
 }
 
-function playNotificationChime(enabled = true) {
-  if (!enabled || typeof window === 'undefined') return;
+let sharedAudioCtx: AudioContext | null = null;
+
+function getUnlockedAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
   try {
     const AudioCtx =
       window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    if (!AudioCtx) return null;
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new AudioCtx();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rings a bright, unmistakable multi-pulse bell chime + triggers mobile haptic vibration
+ * when a new message or feed post arrives and sound is turned ON.
+ */
+function triggerBellRingAndVibrate(enabled = true) {
+  if (!enabled || typeof window === 'undefined') return;
+
+  // 1. Trigger Native Device Vibration (Android & supported mobile browsers)
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([180, 90, 220, 90, 260]);
+    }
+  } catch {}
+
+  // 2. Play Rich Metallic Bell Ring via Web Audio API
+  try {
+    const ctx = getUnlockedAudioContext();
+    if (!ctx) return;
     const now = ctx.currentTime;
-    const playNote = (freq: number, start: number, dur: number) => {
-      const osc = ctx.createOscillator();
+
+    const strikeBell = (freq: number, startTime: number, duration: number, vol = 0.28) => {
+      // Fundamental tone
+      const osc1 = ctx.createOscillator();
+      // Metallic overtone
+      const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, start);
-      gain.gain.setValueAtTime(0.18, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-      osc.connect(gain);
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+      osc1.frequency.setValueAtTime(freq, startTime);
+      osc2.frequency.setValueAtTime(freq * 2.0, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0008, startTime + duration);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + dur);
+
+      osc1.start(startTime);
+      osc2.start(startTime);
+      osc1.stop(startTime + duration);
+      osc2.stop(startTime + duration);
     };
-    playNote(587.33, now, 0.16);
-    playNote(880.0, now + 0.14, 0.28);
+
+    // Double bell ring ("Ding-Dong-Ding!")
+    strikeBell(880.0, now, 0.22, 0.3);          // A5
+    strikeBell(1174.66, now + 0.14, 0.26, 0.32); // D6
+    strikeBell(1318.51, now + 0.30, 0.45, 0.35); // E6
   } catch {}
 }
 
@@ -382,11 +430,13 @@ export default function EmousHomeApp() {
   // Active Notification Bell & Auto-Refresh State
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isBellRinging, setIsBellRinging] = useState(false);
   const [notifications, setNotifications] = useState<ActivityNotification[]>(
     []
   );
   const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string>('Live');
   const prevInboxCountRef = useRef<number | null>(null);
+  const prevFeedTopIdRef = useRef<string | null>(null);
 
   // Share Options Modal State for Feed Posts (Copy Link, WhatsApp, X/Twitter, Native Share, or Download 9:16 PNG)
   const [activeSharePost, setActiveSharePost] = useState<PostDTO | null>(null);
@@ -473,9 +523,33 @@ export default function EmousHomeApp() {
   const [storyThemeId, setStoryThemeId] = useState<string>('story-pink-lime');
   const [isSavingReply, setIsSavingReply] = useState(false);
 
-  const STORAGE_POSTS_CACHE = 'emous_posts_cache_v2';
+  const STORAGE_POSTS_CACHE = 'emous_permanent_feed_posts_v3';
   const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v2';
   const STORAGE_REACTIONS_CACHE = 'emous_reactions_cache_v2';
+
+  const fireBellAlert = useCallback(
+    (toastMsg: string) => {
+      triggerBellRingAndVibrate(soundEnabled);
+      setIsBellRinging(true);
+      setTimeout(() => setIsBellRinging(false), 2000);
+      setToast(toastMsg);
+      setTimeout(() => setToast(null), 3500);
+    },
+    [soundEnabled]
+  );
+
+  // Unlock Web Audio Context on user's first tap/click anywhere on the page
+  useEffect(() => {
+    const unlock = () => {
+      getUnlockedAudioContext();
+    };
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -604,18 +678,31 @@ export default function EmousHomeApp() {
               }
             : post;
         });
+
+        // Ring & vibrate if a new post arrived in the feed during background auto-refresh
+        const newestId = merged[0]?._id || null;
+        if (
+          silent &&
+          prevFeedTopIdRef.current &&
+          newestId &&
+          newestId !== prevFeedTopIdRef.current
+        ) {
+          fireBellAlert('🔔 New anonymous confession just dropped on the feed!');
+        }
+        if (newestId) {
+          prevFeedTopIdRef.current = newestId;
+        }
+
         setPosts(merged);
         setLastUpdatedLabel('Synced just now');
 
+        // Feed items NEVER burn — store permanently without slicing
         if (
           typeof window !== 'undefined' &&
           selectedTag === 'All' &&
           !selectedPhrase
         ) {
-          localStorage.setItem(
-            STORAGE_POSTS_CACHE,
-            JSON.stringify(merged.slice(0, 60))
-          );
+          localStorage.setItem(STORAGE_POSTS_CACHE, JSON.stringify(merged));
         }
       } catch {
         if (typeof window !== 'undefined' && !silent) {
@@ -665,8 +752,7 @@ export default function EmousHomeApp() {
           prevInboxCountRef.current !== null &&
           nextCount > prevInboxCountRef.current
         ) {
-          playNotificationChime(soundEnabled);
-          showToast(
+          fireBellAlert(
             `🔔 New secret confession just arrived for @${currentHandle}!`
           );
         }
@@ -868,12 +954,11 @@ export default function EmousHomeApp() {
       });
       setPosts((prev) => {
         const next = [created, ...prev];
+        prevFeedTopIdRef.current = created._id;
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem(
-              STORAGE_POSTS_CACHE,
-              JSON.stringify(next.slice(0, 60))
-            );
+            // Permanent feed storage — never burns or truncates
+            localStorage.setItem(STORAGE_POSTS_CACHE, JSON.stringify(next));
           } catch {}
         }
         return next;
@@ -1150,18 +1235,27 @@ export default function EmousHomeApp() {
               </div>
             </div>
 
-            {/* Active Notification Bell Icon Button (Shrink-0 so it is always visible on mobile) */}
+            {/* Active Notification Bell Icon Button (Rings & Vibrates on new message) */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setIsNotifOpen((prev) => !prev)}
+                onClick={() => {
+                  getUnlockedAudioContext();
+                  setIsNotifOpen((prev) => !prev);
+                }}
                 className={`p-1.5 sm:p-2 rounded-xl flyer-btn relative inline-flex items-center justify-center ${
+                  isBellRinging ? 'bell-ringing bg-emous-pink text-white' : ''
+                } ${
                   isNotifOpen
                     ? 'bg-emous-yellow text-black'
                     : 'bg-emous-surface text-white hover:bg-neutral-800'
                 }`}
-                title="Live Notifications"
+                title="Live Notifications (Rings & Vibrates when ON)"
               >
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Bell
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    isBellRinging ? 'bell-ringing' : ''
+                  }`}
+                />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 bg-emous-pink text-white border-2 border-black text-[9px] font-extrabold px-1.5 rounded-full animate-pulse">
                     {unreadCount}
@@ -1239,9 +1333,15 @@ export default function EmousHomeApp() {
 
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setSoundEnabled((prev) => !prev)}
+                  onClick={() => {
+                    const nextState = !soundEnabled;
+                    setSoundEnabled(nextState);
+                    if (nextState) {
+                      triggerBellRingAndVibrate(true);
+                    }
+                  }}
                   className="bg-black text-xs px-2.5 py-1 rounded-lg border border-white/20 inline-flex items-center gap-1 font-bold"
-                  title="Toggle notification chime sound"
+                  title="Toggle notification ring & vibration"
                 >
                   {soundEnabled ? (
                     <>
@@ -1254,6 +1354,13 @@ export default function EmousHomeApp() {
                       <span className="text-[10px]">Off</span>
                     </>
                   )}
+                </button>
+                <button
+                  onClick={() => fireBellAlert('🔔 Testing Bell Ring & Vibration!')}
+                  className="bg-emous-yellow text-black text-[10px] font-display font-extrabold px-2 py-1 rounded-lg border border-black uppercase"
+                  title="Test Ring & Vibration"
+                >
+                  🔔 Test Ring
                 </button>
                 <button
                   onClick={() => setIsNotifOpen(false)}
