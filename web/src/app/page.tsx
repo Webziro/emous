@@ -236,7 +236,7 @@ function downloadStoryPng(params: {
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 36px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${BRAND.domain}/ask/${params.handle}`, 540, 1758);
+  ctx.fillText(`${BRAND.domain}/${params.handle}`, 540, 1758);
 
   const link = document.createElement('a');
   link.download = `emous-story-${params.handle.toLowerCase()}.png`;
@@ -328,7 +328,7 @@ function downloadFeedCardStoryPng(post: PostDTO) {
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 34px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${BRAND.domain}/ask/${post.authorHandle}`, 540, 1688);
+  ctx.fillText(`${BRAND.domain}/${post.authorHandle}`, 540, 1688);
 
   const a = document.createElement('a');
   a.download = `emous-card-${post.authorHandle.toLowerCase()}.png`;
@@ -1029,10 +1029,10 @@ export default function EmousHomeApp() {
       typeof window !== 'undefined'
         ? window.location.origin
         : 'https://emous.vercel.app';
-    const fullUrl = `${origin}/ask/${currentHandle}`;
+    const fullUrl = `${origin}/${currentHandle}`;
     navigator.clipboard?.writeText(fullUrl);
     setCopiedLink(true);
-    showToast(`🔗 Copied: ${BRAND.domain}/ask/${currentHandle}`);
+    showToast(`🔗 Copied: ${BRAND.domain}/${currentHandle}`);
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
@@ -1799,7 +1799,7 @@ export default function EmousHomeApp() {
                   LINK
                 </span>
                 <span className="font-display font-extrabold text-sm sm:text-xl text-black truncate">
-                  {BRAND.domain}/ask/{currentHandle}
+                  {BRAND.domain}/{currentHandle}
                 </span>
               </div>
 
@@ -1822,7 +1822,7 @@ export default function EmousHomeApp() {
                 </button>
 
                 <Link
-                  href={`/ask/${currentHandle}`}
+                  href={`/${currentHandle}`}
                   className="bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -2259,30 +2259,25 @@ export default function EmousHomeApp() {
             </div>
 
             <div className="grid grid-cols-1 gap-2.5">
-              {/* 1. Copy Link & Confession Text */}
+              {/* 1. Copy Clean Short Link Only */}
               <button
                 onClick={() => {
-                  const origin =
-                    typeof window !== 'undefined'
-                      ? window.location.origin
-                      : 'https://emous.vercel.app';
-                  const shareUrl = `${origin}/?post=${activeSharePost._id}`;
-                  const shareCopy = `“${activeSharePost.content}” — via @${activeSharePost.authorHandle} on emous (${shareUrl})`;
-                  navigator.clipboard?.writeText(shareCopy);
-                  showToast('🔗 Link & confession copied to clipboard!');
+                  const cleanLink = `https://${BRAND.domain}/${activeSharePost.authorHandle}`;
+                  navigator.clipboard?.writeText(cleanLink);
+                  showToast(`🔗 Copied clean link: ${BRAND.domain}/${activeSharePost.authorHandle}`);
                   setActiveSharePost(null);
                 }}
                 className="w-full bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-2"
               >
                 <Copy className="w-4 h-4" />
-                <span>Copy Post Link & Text 🔗</span>
+                <span>Copy Clean Link ({BRAND.domain}/{activeSharePost.authorHandle})</span>
               </button>
 
               {/* 2. Share to Social Media Row (WhatsApp & X/Twitter) */}
               <div className="grid grid-cols-2 gap-2.5">
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `🤫 Anonymous confession on emous:\n\n“${activeSharePost.content}”\n\nRead & confess anonymously: https://${BRAND.domain}/ask/${activeSharePost.authorHandle}`
+                    `“${activeSharePost.content}”\n\nhttps://${BRAND.domain}/${activeSharePost.authorHandle}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2294,9 +2289,9 @@ export default function EmousHomeApp() {
 
                 <a
                   href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                    `“${activeSharePost.content.slice(0, 180)}” — anonymous on #emous ${activeSharePost.tag}`
+                    `“${activeSharePost.content.slice(0, 180)}” ${activeSharePost.tag}`
                   )}&url=${encodeURIComponent(
-                    `https://${BRAND.domain}/ask/${activeSharePost.authorHandle}`
+                    `https://${BRAND.domain}/${activeSharePost.authorHandle}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2314,9 +2309,9 @@ export default function EmousHomeApp() {
                     onClick={async () => {
                       try {
                         await navigator.share({
-                          title: `emous confession (${activeSharePost.tag})`,
+                          title: 'emous — Dare to Speak!',
                           text: `“${activeSharePost.content}”`,
-                          url: `https://${BRAND.domain}/ask/${activeSharePost.authorHandle}`,
+                          url: `https://${BRAND.domain}/${activeSharePost.authorHandle}`,
                         });
                         setActiveSharePost(null);
                       } catch {}
@@ -2394,7 +2389,7 @@ export default function EmousHomeApp() {
 
                 <div className="text-center">
                   <span className="inline-block bg-emous-pink text-white font-display font-extrabold text-[10px] px-3 py-1 rounded-full border-2 border-black">
-                    {BRAND.domain}/ask/{currentHandle}
+                    {BRAND.domain}/{currentHandle}
                   </span>
                 </div>
               </div>

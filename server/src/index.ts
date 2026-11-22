@@ -66,6 +66,14 @@ export function createApp() {
     res.sendFile(path.join(publicDir, 'index.html'));
   });
 
+  app.get('/@:handle', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+
+  app.get('/:handle([A-Za-z0-9_]{3,30})', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
     res.sendFile(path.join(publicDir, 'index.html'));

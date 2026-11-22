@@ -64,7 +64,7 @@ identityRouter.post('/init', async (req: Request, res: Response) => {
       return res.json({
         deviceId: user.deviceId,
         handle: user.handle,
-        inboxLink: `${domain}/ask/${user.handle}`,
+        inboxLink: `${domain}/${user.handle}`,
         createdAt: user.createdAt,
       });
     }
@@ -95,7 +95,7 @@ identityRouter.post('/init', async (req: Request, res: Response) => {
     return res.json({
       deviceId: localUser.deviceId,
       handle: localUser.handle,
-      inboxLink: `${domain}/ask/${localUser.handle}`,
+      inboxLink: `${domain}/${localUser.handle}`,
       createdAt: localUser.createdAt,
     });
   } catch (err: any) {

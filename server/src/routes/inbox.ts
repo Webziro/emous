@@ -16,8 +16,8 @@ export const inboxRouter = Router();
 
 const inboxSendLimiter = createRateLimiter({
   action: 'secret message',
-  maxRequests: 10,
-  windowMs: 60 * 1000, // Max 10 secret messages per minute per sender
+  maxRequests: 45,
+  windowMs: 60 * 1000, // Supports 70-member group bursts even on shared Wi-Fi IPs
 });
 
 function formatInboxMessage(doc: any) {

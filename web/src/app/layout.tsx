@@ -15,9 +15,24 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'emous — Anonymous Hyperlocal Confessions & Secret Inbox',
+  metadataBase: new URL('https://emous.vercel.app'),
+  title: 'emous — Dare to Speak! Anonymous Confessions & Secret Inbox',
   description:
-    'No logins. Drop hyperlocal visual cards within 5 miles or share your emous.app/ask link to receive anonymous confessions.',
+    'Drop anonymous confessions, vote on hot takes, or send a secret message with zero login.',
+  openGraph: {
+    title: 'emous — Dare to Speak! 🤫🔥',
+    description:
+      'Tap to drop an anonymous confession or read live community secrets. 100% zero-login anonymity.',
+    url: 'https://emous.vercel.app',
+    siteName: 'emous',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'emous — Dare to Speak! 🤫🔥',
+    description:
+      'Tap to drop an anonymous confession or read live community secrets.',
+  },
 };
 
 export default function RootLayout({

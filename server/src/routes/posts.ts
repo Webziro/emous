@@ -27,7 +27,7 @@ export const postsRouter = Router();
 
 const postRateLimiter = createRateLimiter({
   action: 'confession card',
-  maxRequests: 8,
+  maxRequests: 35,
   windowMs: 60 * 1000,
 });
 

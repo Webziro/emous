@@ -255,8 +255,15 @@
     ];
 
     const state = {
-      route: window.location.pathname.startsWith('/ask/') ? 'ask' : 'main',
-      askTargetHandle: decodeURIComponent(window.location.pathname.replace(/^\/ask\//, '') || 'GoldenWizard'),
+      route:
+        window.location.pathname.startsWith('/ask/') ||
+        /^\/[A-Za-z0-9_]{3,30}$/.test(window.location.pathname)
+          ? 'ask'
+          : 'main',
+      askTargetHandle: decodeURIComponent(
+        window.location.pathname.replace(/^\/ask\//, '').replace(/^\//, '') ||
+          'GoldenWizard'
+      ),
       activeScreen: new URLSearchParams(window.location.search).get('tab') === 'inbox' ? 'inbox' : 'feed',
       mobileSimulator: false,
       viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -977,9 +984,9 @@
 
     window.handleCopyLink = () => {
       const handle = getCurrentHandle();
-      const url = `https://emous.vercel.app/ask/${handle}`;
+      const url = `https://emous.vercel.app/${handle}`;
       navigator.clipboard?.writeText(url);
-      showToast(`🔗 Copied: emous.vercel.app/ask/${handle}`);
+      showToast(`🔗 Copied: emous.vercel.app/${handle}`);
     };
 
     window.handleToggleDemoHandle = () => {
@@ -2019,7 +2026,7 @@
                   <div class="flex items-center gap-1.5 overflow-hidden">
                     <span class="bg-emous-pink text-white font-display font-extrabold text-[9px] px-1.5 py-0.5 rounded border border-black shrink-0">LINK</span>
                     <span class="font-display font-extrabold text-xs text-black truncate">
-                      emous.app/ask/${escapeHtml(currentHandle)}
+                      emous.vercel.app/${escapeHtml(currentHandle)}
                     </span>
                   </div>
                   <div class="grid grid-cols-3 gap-1.5">
@@ -2284,14 +2291,14 @@
               ? (() => {
                   const sharePost = state.posts.find((p) => p._id === state.activeSharePostId);
                   if (!sharePost) return '';
-                  const shareUrl = `https://emous.vercel.app/?post=${sharePost._id}`;
+                  const shareUrl = `https://emous.vercel.app/${sharePost.authorHandle}`;
                   const waText = encodeURIComponent(
-                    `🤫 Anonymous confession on emous:\n\n“${sharePost.content}”\n\nRead & confess anonymously: https://emous.vercel.app/ask/${sharePost.authorHandle}`
+                    `“${sharePost.content}”\n\nhttps://emous.vercel.app/${sharePost.authorHandle}`
                   );
                   const xText = encodeURIComponent(
-                    `“${sharePost.content.slice(0, 180)}” — anonymous on #emous ${sharePost.tag}`
+                    `“${sharePost.content.slice(0, 180)}” ${sharePost.tag}`
                   );
-                  const xUrl = encodeURIComponent(`https://emous.vercel.app/ask/${sharePost.authorHandle}`);
+                  const xUrl = encodeURIComponent(`https://emous.vercel.app/${sharePost.authorHandle}`);
 
                   return `
                     <div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 overflow-y-auto">
@@ -2310,10 +2317,10 @@
 
                         <div class="space-y-2">
                           <button
-                            onclick="navigator.clipboard?.writeText('“' + ${JSON.stringify(sharePost.content)} + '” — via @' + ${JSON.stringify(sharePost.authorHandle)} + ' on emous (${shareUrl})'); state.activeSharePostId = null; showToast('🔗 Link & confession copied to clipboard!');"
+                            onclick="navigator.clipboard?.writeText('${shareUrl}'); state.activeSharePostId = null; showToast('🔗 Copied clean link: emous.vercel.app/${escapeHtml(sharePost.authorHandle)}');"
                             class="w-full bg-emous-yellow text-black font-display font-extrabold text-xs py-2.5 px-3 rounded-xl flyer-btn uppercase"
                           >
-                            🔗 Copy Post Link & Text
+                            🔗 Copy Clean Link (emous.vercel.app/${escapeHtml(sharePost.authorHandle)})
                           </button>
 
                           <div class="grid grid-cols-2 gap-2">
