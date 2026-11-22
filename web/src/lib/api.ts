@@ -157,6 +157,55 @@ const API_BASE = resolveApiBase();
 
 const STORAGE_DEVICE_KEY = 'emous_device_fingerprint_v1';
 const STORAGE_HANDLE_KEY = 'emous_user_handle_v1';
+const STORAGE_HANDLE_HISTORY_KEY = 'emous_user_handle_history_v1';
+
+export function getSavedHandleHistory(currentHandle?: string): string[] {
+  if (typeof window === 'undefined') {
+    return currentHandle ? [currentHandle] : [];
+  }
+  try {
+    const raw = JSON.parse(
+      localStorage.getItem(STORAGE_HANDLE_HISTORY_KEY) || '[]'
+    );
+    const list = Array.isArray(raw) ? raw : [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const h of [currentHandle, ...list]) {
+      if (!h || typeof h !== 'string') continue;
+      const clean = h.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || seen.has(lower)) continue;
+      seen.add(lower);
+      out.push(clean);
+    }
+    localStorage.setItem(STORAGE_HANDLE_HISTORY_KEY, JSON.stringify(out));
+    return out;
+  } catch {
+    return currentHandle ? [currentHandle] : [];
+  }
+}
+
+function mergeAndSaveHandleHistory(
+  currentHandle: string,
+  serverHistory?: string[]
+): string[] {
+  if (typeof window === 'undefined') return [currentHandle];
+  const local = getSavedHandleHistory(currentHandle);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const h of [currentHandle, ...(serverHistory || []), ...local]) {
+    if (!h || typeof h !== 'string') continue;
+    const clean = h.trim();
+    const lower = clean.toLowerCase();
+    if (!clean || seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(clean);
+  }
+  try {
+    localStorage.setItem(STORAGE_HANDLE_HISTORY_KEY, JSON.stringify(out));
+  } catch {}
+  return out;
+}
 
 /**
  * Generates or retrieves a deterministic browser fingerprint + local token
@@ -217,7 +266,8 @@ export async function initZeroFrictionIdentity(): Promise<UserIdentityDTO> {
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
       }
-      return data;
+      const history = mergeAndSaveHandleHistory(data.handle, data.handleHistory);
+      return { ...data, handleHistory: history };
     }
   } catch {
     // Fallback if backend is offline
@@ -227,16 +277,22 @@ export async function initZeroFrictionIdentity(): Promise<UserIdentityDTO> {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_HANDLE_KEY, fallbackHandle);
   }
+  const history = mergeAndSaveHandleHistory(fallbackHandle, []);
   return {
     deviceId,
     handle: fallbackHandle,
-    inboxLink: `emous.app/ask/${fallbackHandle}`,
+    handleHistory: history,
+    inboxLink: `emous.vercel.app/${fallbackHandle}`,
     createdAt: new Date().toISOString(),
   };
 }
 
 export async function rerollHandle(): Promise<UserIdentityDTO> {
   const deviceId = getOrCreateDeviceId();
+  const prevHandle =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(STORAGE_HANDLE_KEY) || undefined
+      : undefined;
   try {
     const res = await fetch(`${API_BASE}/identity/reroll`, {
       method: 'POST',
@@ -251,7 +307,11 @@ export async function rerollHandle(): Promise<UserIdentityDTO> {
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
       }
-      return data;
+      const history = mergeAndSaveHandleHistory(data.handle, [
+        ...(data.handleHistory || []),
+        ...(prevHandle ? [prevHandle] : []),
+      ]);
+      return { ...data, handleHistory: history };
     }
   } catch {
     // Offline fallback
@@ -261,10 +321,54 @@ export async function rerollHandle(): Promise<UserIdentityDTO> {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_HANDLE_KEY, nextHandle);
   }
+  const history = mergeAndSaveHandleHistory(
+    nextHandle,
+    prevHandle ? [prevHandle] : []
+  );
   return {
     deviceId,
     handle: nextHandle,
-    inboxLink: `emous.app/ask/${nextHandle}`,
+    handleHistory: history,
+    inboxLink: `emous.vercel.app/${nextHandle}`,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function switchToSavedHandle(
+  targetHandle: string
+): Promise<UserIdentityDTO> {
+  const deviceId = getOrCreateDeviceId();
+  const cleanHandle = targetHandle.trim().replace(/^@/, '');
+  try {
+    const res = await fetch(`${API_BASE}/identity/switch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId,
+      },
+      body: JSON.stringify({ deviceId, handle: cleanHandle }),
+    });
+    if (res.ok) {
+      const data: UserIdentityDTO = await res.json();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_HANDLE_KEY, data.handle);
+      }
+      const history = mergeAndSaveHandleHistory(data.handle, data.handleHistory);
+      return { ...data, handleHistory: history };
+    }
+  } catch {
+    // Offline fallback
+  }
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_HANDLE_KEY, cleanHandle);
+  }
+  const history = mergeAndSaveHandleHistory(cleanHandle, []);
+  return {
+    deviceId,
+    handle: cleanHandle,
+    handleHistory: history,
+    inboxLink: `emous.vercel.app/${cleanHandle}`,
     createdAt: new Date().toISOString(),
   };
 }
@@ -621,6 +725,7 @@ export async function shuffleCardBackground(
 
 export async function fetchInbox(handle: string): Promise<{
   handle: string;
+  handleHistory?: string[];
   inboxLink: string;
   count: number;
   unreadCount: number;
@@ -638,6 +743,12 @@ export async function fetchInbox(handle: string): Promise<{
     );
     if (res.ok) {
       const data = await res.json();
+      if (
+        Array.isArray(data.handleHistory) &&
+        handle.toLowerCase() !== 'goldenwizard'
+      ) {
+        mergeAndSaveHandleHistory(handle, data.handleHistory);
+      }
       return data;
     }
   } catch {

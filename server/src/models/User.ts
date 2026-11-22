@@ -4,6 +4,8 @@ export interface IUser extends Document {
   deviceId: string;
   handle: string;
   handleLower: string;
+  handleHistory: string[];
+  handleHistoryLower: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +32,15 @@ const UserSchema = new Schema<IUser>(
       index: true,
       lowercase: true,
       trim: true,
+    },
+    handleHistory: {
+      type: [String],
+      default: [],
+    },
+    handleHistoryLower: {
+      type: [String],
+      index: true,
+      default: [],
     },
   },
   {

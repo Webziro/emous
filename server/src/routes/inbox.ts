@@ -54,14 +54,15 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
 
     let targetHandleLower = handleParam ? handleParam.toLowerCase() : '';
     let canonicalHandle = handleParam || '';
+    const includeAllDeviceHandles = req.query.includeAll !== 'false';
 
     if (isUsingMongo()) {
-      if (!targetHandleLower && deviceId) {
-        const user = await UserModel.findOne({ deviceId }).lean();
-        if (user) {
-          targetHandleLower = user.handleLower;
-          canonicalHandle = user.handle;
-        }
+      const user = deviceId
+        ? await UserModel.findOne({ deviceId }).lean()
+        : null;
+      if (!targetHandleLower && user) {
+        targetHandleLower = user.handleLower;
+        canonicalHandle = user.handle;
       }
       if (!targetHandleLower) {
         return res.status(400).json({
@@ -69,8 +70,26 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
         });
       }
 
+      // If this request is for the current device's own handle (not the public demo inbox),
+      // include messages sent to ALL handles in this device's handleHistory so switching handles never loses old inbox messages!
+      const isMyOwnHandle =
+        user &&
+        (user.handleLower === targetHandleLower ||
+          (user.handleHistoryLower || []).includes(targetHandleLower));
+
+      const allowedHandlesLower =
+        includeAllDeviceHandles && isMyOwnHandle && targetHandleLower !== 'goldenwizard'
+          ? Array.from(
+              new Set([
+                targetHandleLower,
+                user.handleLower,
+                ...(user.handleHistoryLower || []),
+              ])
+            )
+          : [targetHandleLower];
+
       const messages = await InboxMessageModel.find({
-        recipientHandleLower: targetHandleLower,
+        recipientHandleLower: { $in: allowedHandlesLower },
         isHidden: false,
       })
         .sort({ createdAt: -1 })
@@ -80,7 +99,8 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
       const domain = process.env.PUBLIC_DOMAIN || BRAND.domain;
       return res.json({
         handle: canonicalHandle,
-        inboxLink: `${domain}/ask/${canonicalHandle}`,
+        handleHistory: user?.handleHistory || [canonicalHandle],
+        inboxLink: `${domain}/${canonicalHandle}`,
         count: messages.length,
         unreadCount: messages.filter((m) => !m.isRead).length,
         messages: messages.map(formatInboxMessage),
@@ -91,12 +111,12 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
     reloadLocalStoreFromDiskIfNeeded();
     purgeExpiredInboxMessages();
 
-    if (!targetHandleLower && deviceId) {
-      const user = localStore.users.find((u) => u.deviceId === deviceId);
-      if (user) {
-        targetHandleLower = user.handleLower;
-        canonicalHandle = user.handle;
-      }
+    const localUser = deviceId
+      ? localStore.users.find((u) => u.deviceId === deviceId)
+      : undefined;
+    if (!targetHandleLower && localUser) {
+      targetHandleLower = localUser.handleLower;
+      canonicalHandle = localUser.handle;
     }
     if (!targetHandleLower) {
       return res.status(400).json({
@@ -104,9 +124,25 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
+    const isMyOwnLocalHandle =
+      localUser &&
+      (localUser.handleLower === targetHandleLower ||
+        (localUser.handleHistoryLower || []).includes(targetHandleLower));
+
+    const allowedLocalHandles = new Set(
+      includeAllDeviceHandles && isMyOwnLocalHandle && targetHandleLower !== 'goldenwizard'
+        ? [
+            targetHandleLower,
+            localUser.handleLower,
+            ...(localUser.handleHistoryLower || []),
+          ]
+        : [targetHandleLower]
+    );
+
     const messages = localStore.inbox
       .filter(
-        (m) => m.recipientHandleLower === targetHandleLower && !m.isHidden
+        (m) =>
+          allowedLocalHandles.has(m.recipientHandleLower) && !m.isHidden
       )
       .sort(
         (a, b) =>
@@ -116,7 +152,8 @@ inboxRouter.get('/', async (req: Request, res: Response) => {
     const domain = process.env.PUBLIC_DOMAIN || BRAND.domain;
     return res.json({
       handle: canonicalHandle,
-      inboxLink: `${domain}/ask/${canonicalHandle}`,
+      handleHistory: localUser?.handleHistory || [canonicalHandle],
+      inboxLink: `${domain}/${canonicalHandle}`,
       count: messages.length,
       unreadCount: messages.filter((m) => !m.isRead).length,
       messages: messages.map(formatInboxMessage),

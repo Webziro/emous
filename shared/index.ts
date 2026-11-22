@@ -685,6 +685,7 @@ export interface ReactionCounts {
 export interface UserIdentityDTO {
   deviceId: string;
   handle: string;
+  handleHistory?: string[];
   inboxLink: string;
   createdAt: string;
 }

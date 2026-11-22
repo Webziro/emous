@@ -52,11 +52,13 @@ import {
   fetchTrendingData,
   flagInboxMessage,
   flagPost,
+  getSavedHandleHistory,
   initZeroFrictionIdentity,
   reactToPost,
   replyToInboxMessage,
   rerollHandle,
   shuffleCardBackground,
+  switchToSavedHandle,
   voteOnPostPoll,
 } from '@/lib/api-bundle';
 
@@ -522,6 +524,8 @@ export default function EmousHomeApp() {
   const [replyText, setReplyText] = useState('');
   const [storyThemeId, setStoryThemeId] = useState<string>('story-pink-lime');
   const [isSavingReply, setIsSavingReply] = useState(false);
+  const [handleHistory, setHandleHistory] = useState<string[]>([]);
+  const [isHandleSwitcherOpen, setIsHandleSwitcherOpen] = useState(false);
 
   const STORAGE_POSTS_CACHE = 'emous_permanent_feed_posts_v3';
   const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v2';
@@ -580,6 +584,11 @@ export default function EmousHomeApp() {
   useEffect(() => {
     initZeroFrictionIdentity().then((user) => {
       setIdentity(user);
+      setHandleHistory(
+        user.handleHistory?.length
+          ? user.handleHistory
+          : getSavedHandleHistory(user.handle)
+      );
     });
   }, []);
 
@@ -784,6 +793,13 @@ export default function EmousHomeApp() {
 
         setInboxMessages(data.messages);
         setUnreadCount(data.unreadCount);
+        if (
+          !demoGoldenWizardMode &&
+          Array.isArray(data.handleHistory) &&
+          data.handleHistory.length > 0
+        ) {
+          setHandleHistory(data.handleHistory);
+        }
 
         // Build Notification Bell Feed from Inbox notes & trending velocity
         const inboxNotifs: ActivityNotification[] = data.messages
@@ -1245,13 +1261,8 @@ export default function EmousHomeApp() {
                   {streetCred.emoji} {streetCred.score}
                 </span>
                 <button
-                  onClick={async () => {
-                    setDemoGoldenWizardMode(false);
-                    const next = await rerollHandle();
-                    setIdentity(next);
-                    showToast(`🎲 Switched handle to @${next.handle}`);
-                  }}
-                  title="Roll a new random handle"
+                  onClick={() => setIsHandleSwitcherOpen(true)}
+                  title="Switch or roll a new handle (Your previous handles & inbox stay saved!)"
                   className="text-neutral-400 hover:text-emous-pink shrink-0"
                 >
                   <RefreshCw className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5" />
@@ -1961,6 +1972,43 @@ export default function EmousHomeApp() {
                 </Link>
               </div>
             </div>
+
+            {/* Option A: My Saved Handles Switcher — Never lose messages from an old shared handle! */}
+            {!demoGoldenWizardMode && handleHistory.length > 1 && (
+              <div className="mt-2.5 bg-black/90 text-white rounded-xl p-2.5 border-2 border-black flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-display font-extrabold uppercase text-emous-yellow">
+                    🎭 My Saved Handles (All sync to your Inbox):
+                  </span>
+                  {handleHistory.map((h) => {
+                    const isActive =
+                      h.toLowerCase() === currentHandle.toLowerCase();
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={async () => {
+                          if (isActive) return;
+                          const switched = await switchToSavedHandle(h);
+                          setIdentity(switched);
+                          if (switched.handleHistory?.length) {
+                            setHandleHistory(switched.handleHistory);
+                          }
+                          showToast(`🎭 Switched back to @${switched.handle}`);
+                        }}
+                        className={`text-[11px] font-display font-extrabold px-2.5 py-0.5 rounded-full border border-black transition-all ${
+                          isActive
+                            ? 'bg-emous-lime text-black'
+                            : 'bg-emous-surface text-neutral-300 hover:text-white hover:border-emous-yellow'
+                        }`}
+                      >
+                        @{h} {isActive ? '• Active' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Inbox Secret Notes Grid */}
@@ -2005,19 +2053,28 @@ export default function EmousHomeApp() {
                       className="bg-emous-surface rounded-3xl p-5 flyer-card flex flex-col justify-between gap-3.5 border-2 border-black relative"
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span
-                          style={{
-                            backgroundColor: msg.isRead ? '#FFE600' : '#FF1E8E',
-                            color: msg.isRead ? '#0D0D11' : '#FFFFFF',
-                          }}
-                          className="text-[10px] font-display font-extrabold uppercase px-2.5 py-0.5 rounded-full border-2 border-black"
-                        >
-                          {msg.burnAfterReading
-                            ? '💣 Flash Burn Note'
-                            : msg.isRead
-                            ? '✉️ Opened Note'
-                            : '🔥 New Secret Note'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            style={{
+                              backgroundColor: msg.isRead ? '#FFE600' : '#FF1E8E',
+                              color: msg.isRead ? '#0D0D11' : '#FFFFFF',
+                            }}
+                            className="text-[10px] font-display font-extrabold uppercase px-2.5 py-0.5 rounded-full border-2 border-black"
+                          >
+                            {msg.burnAfterReading
+                              ? '💣 Flash Burn Note'
+                              : msg.isRead
+                              ? '✉️ Opened Note'
+                              : '🔥 New Secret Note'}
+                          </span>
+                          {msg.recipientHandle &&
+                            msg.recipientHandle.toLowerCase() !==
+                              currentHandle.toLowerCase() && (
+                              <span className="bg-black text-emous-lime text-[10px] font-display font-extrabold px-2 py-0.5 rounded-full border border-emous-lime/50">
+                                → @{msg.recipientHandle}
+                              </span>
+                            )}
+                        </div>
 
                         {/* Wow Feature #3: Live Ticking 30-Day Burn Countdown */}
                         <span className="bg-black text-emous-yellow text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-white/15 inline-flex items-center gap-1">
@@ -2628,6 +2685,110 @@ export default function EmousHomeApp() {
                   Save Reply Only
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 5: OPTION A + OPTION B — HANDLE SWITCHER & CONFIRMATION MODAL
+         ===================================================================== */}
+      {isHandleSwitcherOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-emous-surface w-full max-w-md rounded-3xl p-5 flyer-card space-y-4 my-auto border-2 border-black">
+            <div className="flex items-center justify-between">
+              <span className="bg-emous-yellow text-black font-display font-extrabold text-xs uppercase px-3 py-1 rounded-full border-2 border-black">
+                🎭 MANAGE ANONYMOUS HANDLES
+              </span>
+              <button
+                onClick={() => setIsHandleSwitcherOpen(false)}
+                className="bg-black text-white p-1.5 rounded-xl border-2 border-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-black/80 rounded-2xl p-3.5 border-2 border-black space-y-1.5">
+              <p className="text-xs font-extrabold text-emous-lime">
+                Current Active Handle: @{currentHandle}
+              </p>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                If you roll a new handle, <strong>@{currentHandle}</strong> and
+                all messages sent to{' '}
+                <span className="text-emous-yellow font-bold">
+                  {BRAND.domain}/{currentHandle}
+                </span>{' '}
+                stay permanently linked to your device! You can switch back to
+                any of your previous handles below at any time.
+              </p>
+            </div>
+
+            {handleHistory.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-display font-extrabold uppercase text-neutral-400">
+                  Your Saved Handles on This Device ({handleHistory.length}):
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
+                  {handleHistory.map((h) => {
+                    const isActive =
+                      !demoGoldenWizardMode &&
+                      h.toLowerCase() === currentHandle.toLowerCase();
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={async () => {
+                          setDemoGoldenWizardMode(false);
+                          const switched = await switchToSavedHandle(h);
+                          setIdentity(switched);
+                          if (switched.handleHistory?.length) {
+                            setHandleHistory(switched.handleHistory);
+                          }
+                          setIsHandleSwitcherOpen(false);
+                          showToast(`🎭 Switched active handle to @${switched.handle}`);
+                        }}
+                        className={`text-xs font-display font-extrabold px-3 py-1.5 rounded-xl border-2 border-black transition-all ${
+                          isActive
+                            ? 'bg-emous-lime text-black shadow-brutal'
+                            : 'bg-black text-white hover:border-emous-yellow'
+                        }`}
+                      >
+                        @{h} {isActive ? '✓ Active' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-1 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setDemoGoldenWizardMode(false);
+                  const next = await rerollHandle();
+                  setIdentity(next);
+                  if (next.handleHistory?.length) {
+                    setHandleHistory(next.handleHistory);
+                  }
+                  setIsHandleSwitcherOpen(false);
+                  showToast(
+                    `🎲 Switched to @${next.handle} (Previous handles saved!)`
+                  );
+                }}
+                className="flex-1 bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm py-3 px-4 rounded-2xl flyer-btn uppercase flex items-center justify-center gap-1.5"
+              >
+                <Dices className="w-4 h-4" />
+                <span>Roll New Handle 🎲</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsHandleSwitcherOpen(false)}
+                className="bg-black text-neutral-300 hover:text-white font-display font-extrabold text-xs py-3 px-4 rounded-2xl border-2 border-black uppercase"
+              >
+                Keep @{currentHandle}
+              </button>
             </div>
           </div>
         </div>

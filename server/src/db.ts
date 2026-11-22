@@ -28,6 +28,8 @@ export interface LocalUserDoc {
   deviceId: string;
   handle: string;
   handleLower: string;
+  handleHistory?: string[];
+  handleHistoryLower?: string[];
   createdAt: string;
   updatedAt: string;
 }
