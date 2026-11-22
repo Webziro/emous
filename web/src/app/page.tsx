@@ -116,31 +116,9 @@ function buildPostShareUrl(post: PostDTO): string {
   return `https://${BRAND.domain}/feed/${slug}`;
 }
 
-function buildPostShareText(post: PostDTO): string {
-  const url = buildPostShareUrl(post);
-  const snippet =
-    post.content.length > 140
-      ? `${post.content.slice(0, 137)}...`
-      : post.content;
-  const whispersCount = post.commentsCount ?? post.comments?.length ?? 0;
-  const latestWhisper =
-    post.comments && post.comments.length > 0
-      ? `\n💬 Latest Whisper: “${post.comments[post.comments.length - 1].text.slice(0, 80)}”`
-      : whispersCount > 0
-      ? `\n💬 ${whispersCount} anonymous whispers`
-      : '';
-  return `🤫 ${post.tag} Confession by @${post.authorHandle} on emous:\n“${snippet}”${latestWhisper}\n\n👉 Read & reply anonymously: ${url}`;
-}
-
 function buildInboxShareUrl(handle: string): string {
   const cleanHandle = handle.replace(/^@/, '');
-  return `https://${BRAND.domain}/@${cleanHandle}`;
-}
-
-function buildInboxShareText(handle: string): string {
-  const cleanHandle = handle.replace(/^@/, '');
-  const url = buildInboxShareUrl(cleanHandle);
-  return `🤫 Send @${cleanHandle} an anonymous secret confession on emous (100% zero login):\n${url}`;
+  return `https://${BRAND.domain}/${cleanHandle}`;
 }
 
 let sharedAudioCtx: AudioContext | null = null;
@@ -1232,10 +1210,10 @@ export default function EmousHomeApp() {
   };
 
   const handleCopyInboxLink = () => {
-    const shareText = buildInboxShareText(currentHandle);
-    navigator.clipboard?.writeText(shareText);
+    const cleanUrl = buildInboxShareUrl(currentHandle);
+    navigator.clipboard?.writeText(cleanUrl);
     setCopiedLink(true);
-    showToast(`🔗 Copied invite link for @${currentHandle}!`);
+    showToast(`🔗 Copied: ${cleanUrl}`);
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
@@ -2016,10 +1994,10 @@ export default function EmousHomeApp() {
             <div className="mt-3 bg-white rounded-xl p-2.5 sm:p-3 border-2 border-black shadow-brutal flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 px-2 overflow-hidden">
                 <span className="bg-emous-pink text-white font-display font-extrabold text-xs px-2.5 py-1 rounded-lg border-2 border-black shrink-0">
-                  INBOX LINK
+                  LINK
                 </span>
                 <span className="font-display font-extrabold text-sm sm:text-xl text-black truncate">
-                  {BRAND.domain}/@{currentHandle}
+                  {BRAND.domain}/{currentHandle}
                 </span>
               </div>
 
@@ -2036,14 +2014,14 @@ export default function EmousHomeApp() {
                   ) : (
                     <>
                       <Copy className="w-4 h-4" />
-                      <span>Copy Invite 🔗</span>
+                      <span>Copy My Link 🔗</span>
                     </>
                   )}
                 </button>
 
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    buildInboxShareText(currentHandle)
+                    buildInboxShareUrl(currentHandle)
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2053,7 +2031,7 @@ export default function EmousHomeApp() {
                 </a>
 
                 <Link
-                  href={`/@${currentHandle}`}
+                  href={`/${currentHandle}`}
                   className="bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -2554,41 +2532,25 @@ export default function EmousHomeApp() {
             </div>
 
             <div className="grid grid-cols-1 gap-2.5">
-              {/* 1. Copy Preview Snippet + Subject Link */}
+              {/* 1. Copy Clean Subject Link Only */}
               <button
                 onClick={() => {
-                  const fullShare = buildPostShareText(activeSharePost);
-                  navigator.clipboard?.writeText(fullShare);
-                  showToast('🔗 Copied confession preview & subject link!');
+                  const urlOnly = buildPostShareUrl(activeSharePost);
+                  navigator.clipboard?.writeText(urlOnly);
+                  showToast(`🔗 Copied: ${urlOnly}`);
                   setActiveSharePost(null);
                 }}
                 className="w-full bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-2"
               >
                 <Copy className="w-4 h-4" />
-                <span>Copy Subject Preview & Link 🔗</span>
+                <span>Copy Link 🔗</span>
               </button>
 
-              {/* 1b. Copy URL Only */}
-              <button
-                onClick={() => {
-                  const urlOnly = buildPostShareUrl(activeSharePost);
-                  navigator.clipboard?.writeText(urlOnly);
-                  showToast(`🔗 Copied: ${urlOnly.replace(/^https:\/\//, '')}`);
-                  setActiveSharePost(null);
-                }}
-                className="w-full bg-black text-emous-lime font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black uppercase flex items-center justify-center gap-1.5"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span className="truncate">
-                  Copy Subject URL Only ({buildPostShareUrl(activeSharePost).replace(/^https:\/\//, '')})
-                </span>
-              </button>
-
-              {/* 2. Share to Social Media Row (WhatsApp & X/Twitter) */}
+              {/* 2. Share to Social Media Row (WhatsApp & X/Twitter) — shares the clean URL only */}
               <div className="grid grid-cols-2 gap-2.5">
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    buildPostShareText(activeSharePost)
+                    buildPostShareUrl(activeSharePost)
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2599,9 +2561,7 @@ export default function EmousHomeApp() {
                 </a>
 
                 <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                    `🤫 ${activeSharePost.tag} Confession by @${activeSharePost.authorHandle}: “${activeSharePost.content.slice(0, 150)}”`
-                  )}&url=${encodeURIComponent(
+                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(
                     buildPostShareUrl(activeSharePost)
                   )}`}
                   target="_blank"
@@ -2620,8 +2580,6 @@ export default function EmousHomeApp() {
                     onClick={async () => {
                       try {
                         await navigator.share({
-                          title: `🤫 ${activeSharePost.tag} Confession by @${activeSharePost.authorHandle} on emous`,
-                          text: buildPostShareText(activeSharePost),
                           url: buildPostShareUrl(activeSharePost),
                         });
                         setActiveSharePost(null);
