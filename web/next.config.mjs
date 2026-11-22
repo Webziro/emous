@@ -14,6 +14,10 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: '/feed/:slug*',
+        destination: '/?topic=:slug*',
+      },
+      {
         source: '/@:handle',
         destination: '/ask/:handle',
       },
@@ -22,7 +26,7 @@ const nextConfig = {
         destination: '/ask/:handle',
       },
       {
-        source: '/:handle((?!api|_next|ask|favicon\\.ico|styles\\.css|.*\\..*)[A-Za-z0-9_]{3,30})',
+        source: '/:handle((?!api|_next|ask|feed|favicon\\.ico|styles\\.css|.*\\..*)[A-Za-z0-9_]{3,30})',
         destination: '/ask/:handle',
       },
     ];

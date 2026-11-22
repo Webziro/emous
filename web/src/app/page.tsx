@@ -86,6 +86,63 @@ function formatBurnCountdown(createdAtIso: string): string {
   return `${days}d ${hours}h left`;
 }
 
+/**
+ * Builds a clean, human-readable subject slug from a post's content & tag
+ * so shared links immediately preview the subject matter in the URL!
+ * Example: https://emous.vercel.app/feed/work-i-have-a-confession-hr-is-so-beautiful
+ */
+function buildPostSubjectSlug(post: PostDTO): string {
+  const rawText = post.qaCard
+    ? `${post.qaCard.question} ${post.qaCard.reply}`
+    : post.content || '';
+  const tagWord = (post.tag || '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toLowerCase();
+  const words = rawText
+    .toLowerCase()
+    .replace(/#[a-z0-9_]+/gi, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2)
+    .slice(0, 7);
+
+  const combined = [tagWord, ...words].filter(Boolean);
+  const slug = combined.join('-').slice(0, 56).replace(/-+$/, '');
+  return slug || 'anonymous-confession';
+}
+
+function buildPostShareUrl(post: PostDTO): string {
+  const slug = buildPostSubjectSlug(post);
+  return `https://${BRAND.domain}/feed/${slug}`;
+}
+
+function buildPostShareText(post: PostDTO): string {
+  const url = buildPostShareUrl(post);
+  const snippet =
+    post.content.length > 140
+      ? `${post.content.slice(0, 137)}...`
+      : post.content;
+  const whispersCount = post.commentsCount ?? post.comments?.length ?? 0;
+  const latestWhisper =
+    post.comments && post.comments.length > 0
+      ? `\n💬 Latest Whisper: “${post.comments[post.comments.length - 1].text.slice(0, 80)}”`
+      : whispersCount > 0
+      ? `\n💬 ${whispersCount} anonymous whispers`
+      : '';
+  return `🤫 ${post.tag} Confession by @${post.authorHandle} on emous:\n“${snippet}”${latestWhisper}\n\n👉 Read & reply anonymously: ${url}`;
+}
+
+function buildInboxShareUrl(handle: string): string {
+  const cleanHandle = handle.replace(/^@/, '');
+  return `https://${BRAND.domain}/@${cleanHandle}`;
+}
+
+function buildInboxShareText(handle: string): string {
+  const cleanHandle = handle.replace(/^@/, '');
+  const url = buildInboxShareUrl(cleanHandle);
+  return `🤫 Send @${cleanHandle} an anonymous secret confession on emous (100% zero login):\n${url}`;
+}
+
 let sharedAudioCtx: AudioContext | null = null;
 
 function getUnlockedAudioContext(): AudioContext | null {
@@ -729,6 +786,25 @@ export default function EmousHomeApp() {
         setPosts(merged);
         setLastUpdatedLabel('Synced just now');
 
+        // If user opened a shared subject URL like /feed/work-i-have-a-confession-hr-is-so-beautiful,
+        // automatically open that post's Whisper Comments modal on initial load!
+        if (typeof window !== 'undefined' && !silent) {
+          const pathMatch = window.location.pathname.match(/^\/feed\/([^/?#]+)/i);
+          const topicParam =
+            pathMatch?.[1] ||
+            new URLSearchParams(window.location.search).get('topic') ||
+            '';
+          if (topicParam) {
+            const cleanSlug = decodeURIComponent(topicParam).toLowerCase();
+            const foundPost = merged.find(
+              (p) => buildPostSubjectSlug(p).toLowerCase() === cleanSlug
+            );
+            if (foundPost) {
+              setActiveCommentPost((prev) => prev || foundPost);
+            }
+          }
+        }
+
         // Feed items NEVER burn — store permanently without slicing
         if (
           typeof window !== 'undefined' &&
@@ -1150,14 +1226,10 @@ export default function EmousHomeApp() {
   };
 
   const handleCopyInboxLink = () => {
-    const origin =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : 'https://emous.vercel.app';
-    const fullUrl = `${origin}/${currentHandle}`;
-    navigator.clipboard?.writeText(fullUrl);
+    const shareText = buildInboxShareText(currentHandle);
+    navigator.clipboard?.writeText(shareText);
     setCopiedLink(true);
-    showToast(`🔗 Copied: ${BRAND.domain}/${currentHandle}`);
+    showToast(`🔗 Copied invite link for @${currentHandle}!`);
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
@@ -1938,14 +2010,14 @@ export default function EmousHomeApp() {
             <div className="mt-3 bg-white rounded-xl p-2.5 sm:p-3 border-2 border-black shadow-brutal flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 px-2 overflow-hidden">
                 <span className="bg-emous-pink text-white font-display font-extrabold text-xs px-2.5 py-1 rounded-lg border-2 border-black shrink-0">
-                  LINK
+                  INBOX LINK
                 </span>
                 <span className="font-display font-extrabold text-sm sm:text-xl text-black truncate">
-                  {BRAND.domain}/{currentHandle}
+                  {BRAND.domain}/@{currentHandle}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <button
                   onClick={handleCopyInboxLink}
                   className="flex-1 sm:flex-initial bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm px-4 py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1.5"
@@ -1958,13 +2030,24 @@ export default function EmousHomeApp() {
                   ) : (
                     <>
                       <Copy className="w-4 h-4" />
-                      <span>Copy My Link 🔗</span>
+                      <span>Copy Invite 🔗</span>
                     </>
                   )}
                 </button>
 
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    buildInboxShareText(currentHandle)
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-black text-emous-lime font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
+                >
+                  <span>💬 WhatsApp</span>
+                </a>
+
                 <Link
-                  href={`/${currentHandle}`}
+                  href={`/@${currentHandle}`}
                   className="bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -2345,16 +2428,31 @@ export default function EmousHomeApp() {
       {activeCommentPost && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
           <div className="bg-emous-surface w-full max-w-lg rounded-3xl p-5 flyer-card space-y-4 my-auto">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="bg-emous-yellow text-black font-display font-extrabold text-xs uppercase px-3 py-1 rounded-full border-2 border-black">
                 💬 ANONYMOUS WHISPER THREAD ({activeCommentPost.tag})
               </span>
-              <button
-                onClick={() => setActiveCommentPost(null)}
-                className="bg-black text-white p-1.5 rounded-xl border-2 border-white/20"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const postToShare = activeCommentPost;
+                    setActiveCommentPost(null);
+                    setActiveSharePost(postToShare);
+                  }}
+                  title="Share this confession & whisper thread"
+                  className="bg-emous-pink text-white text-[11px] font-display font-extrabold px-2.5 py-1.5 rounded-xl border-2 border-black inline-flex items-center gap-1"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share</span>
+                </button>
+                <button
+                  onClick={() => setActiveCommentPost(null)}
+                  className="bg-black text-white p-1.5 rounded-xl border-2 border-white/20"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="bg-black/75 rounded-2xl p-3.5 border-2 border-black">
@@ -2437,35 +2535,54 @@ export default function EmousHomeApp() {
               </button>
             </div>
 
-            <div className="bg-black/75 rounded-2xl p-3.5 border-2 border-black space-y-1">
+            <div className="bg-black/75 rounded-2xl p-3.5 border-2 border-black space-y-1.5">
               <span className="text-[11px] font-extrabold text-emous-yellow">
                 🎭 @{activeSharePost.authorHandle} • {activeSharePost.tag}
               </span>
               <p className="font-sans font-bold text-xs sm:text-sm text-white line-clamp-3">
                 “{activeSharePost.content}”
               </p>
+              <p className="text-[11px] font-bold text-emous-lime break-all pt-1 border-t border-white/15">
+                🔗 {buildPostShareUrl(activeSharePost).replace(/^https:\/\//, '')}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-2.5">
-              {/* 1. Copy Clean Short Link Only */}
+              {/* 1. Copy Preview Snippet + Subject Link */}
               <button
                 onClick={() => {
-                  const cleanLink = `https://${BRAND.domain}/${activeSharePost.authorHandle}`;
-                  navigator.clipboard?.writeText(cleanLink);
-                  showToast(`🔗 Copied clean link: ${BRAND.domain}/${activeSharePost.authorHandle}`);
+                  const fullShare = buildPostShareText(activeSharePost);
+                  navigator.clipboard?.writeText(fullShare);
+                  showToast('🔗 Copied confession preview & subject link!');
                   setActiveSharePost(null);
                 }}
                 className="w-full bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-2"
               >
                 <Copy className="w-4 h-4" />
-                <span>Copy Clean Link ({BRAND.domain}/{activeSharePost.authorHandle})</span>
+                <span>Copy Subject Preview & Link 🔗</span>
+              </button>
+
+              {/* 1b. Copy URL Only */}
+              <button
+                onClick={() => {
+                  const urlOnly = buildPostShareUrl(activeSharePost);
+                  navigator.clipboard?.writeText(urlOnly);
+                  showToast(`🔗 Copied: ${urlOnly.replace(/^https:\/\//, '')}`);
+                  setActiveSharePost(null);
+                }}
+                className="w-full bg-black text-emous-lime font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black uppercase flex items-center justify-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span className="truncate">
+                  Copy Subject URL Only ({buildPostShareUrl(activeSharePost).replace(/^https:\/\//, '')})
+                </span>
               </button>
 
               {/* 2. Share to Social Media Row (WhatsApp & X/Twitter) */}
               <div className="grid grid-cols-2 gap-2.5">
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `“${activeSharePost.content}”\n\nhttps://${BRAND.domain}/${activeSharePost.authorHandle}`
+                    buildPostShareText(activeSharePost)
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2477,9 +2594,9 @@ export default function EmousHomeApp() {
 
                 <a
                   href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                    `“${activeSharePost.content.slice(0, 180)}” ${activeSharePost.tag}`
+                    `🤫 ${activeSharePost.tag} Confession by @${activeSharePost.authorHandle}: “${activeSharePost.content.slice(0, 150)}”`
                   )}&url=${encodeURIComponent(
-                    `https://${BRAND.domain}/${activeSharePost.authorHandle}`
+                    buildPostShareUrl(activeSharePost)
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2497,9 +2614,9 @@ export default function EmousHomeApp() {
                     onClick={async () => {
                       try {
                         await navigator.share({
-                          title: 'emous — Dare to Speak!',
-                          text: `“${activeSharePost.content}”`,
-                          url: `https://${BRAND.domain}/${activeSharePost.authorHandle}`,
+                          title: `🤫 ${activeSharePost.tag} Confession by @${activeSharePost.authorHandle} on emous`,
+                          text: buildPostShareText(activeSharePost),
+                          url: buildPostShareUrl(activeSharePost),
                         });
                         setActiveSharePost(null);
                       } catch {}
