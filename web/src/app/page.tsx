@@ -639,7 +639,8 @@ export default function EmousHomeApp() {
           setTrendingPhrases(data.trendingPhrases);
         }
 
-        // Merge any locally created posts that aren't in the server list yet so user's posts never vanish
+        // Merge any locally created posts that aren't in the server list yet so user's posts never vanish,
+        // and automatically sync any offline/pre-MongoDB local posts up to the permanent MongoDB Atlas cloud!
         let localCreatedPosts: PostDTO[] = [];
         if (typeof window !== 'undefined') {
           try {
@@ -649,18 +650,41 @@ export default function EmousHomeApp() {
           } catch {}
         }
         const serverIds = new Set(data.posts.map((p) => p._id));
+        const serverContents = new Set(
+          data.posts.map((p) => p.content.trim().toLowerCase())
+        );
         const combinedPosts = [...data.posts];
         for (const lp of localCreatedPosts) {
-          if (lp && lp._id && !serverIds.has(lp._id) && !lp.isHidden) {
-            if (
-              selectedTag === 'All' ||
-              lp.tag?.toLowerCase() === selectedTag.toLowerCase() ||
-              lp.categories?.some(
-                (c) => c.toLowerCase() === selectedTag.toLowerCase()
-              )
-            ) {
-              combinedPosts.unshift(lp);
-            }
+          if (!lp || !lp._id || lp.isHidden) continue;
+          const normalizedContent = (lp.content || '').trim().toLowerCase();
+          if (serverIds.has(lp._id) || serverContents.has(normalizedContent)) {
+            continue;
+          }
+          // If this post was created while offline or before MongoDB Atlas was connected, push it to the cloud once
+          if (
+            selectedTag === 'All' &&
+            !selectedPhrase &&
+            lp.content &&
+            lp.content.trim().length >= 2
+          ) {
+            serverContents.add(normalizedContent);
+            createPost({
+              content: lp.content,
+              tag: lp.tag || 'AUTO',
+              backgroundId: lp.background?.id || 'grad-neon-riot',
+              authorHandle: lp.authorHandle,
+              locationLabel: lp.location?.label || 'Near You',
+              pollOptions: lp.poll?.options?.map((o) => o.text),
+            }).catch(() => {});
+          }
+          if (
+            selectedTag === 'All' ||
+            lp.tag?.toLowerCase() === selectedTag.toLowerCase() ||
+            lp.categories?.some(
+              (c) => c.toLowerCase() === selectedTag.toLowerCase()
+            )
+          ) {
+            combinedPosts.unshift(lp);
           }
         }
 
