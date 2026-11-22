@@ -737,10 +737,16 @@ export default function EmousHomeApp() {
             createPost({
               content: lp.content,
               tag: lp.tag || 'AUTO',
-              backgroundId: lp.background?.id || 'grad-neon-riot',
+              background: lp.background || CURATED_GRADIENTS[0],
               authorHandle: lp.authorHandle,
-              locationLabel: lp.location?.label || 'Near You',
-              pollOptions: lp.poll?.options?.map((o) => o.text),
+              poll:
+                lp.poll?.optionA?.text && lp.poll?.optionB?.text
+                  ? {
+                      optionA: lp.poll.optionA.text,
+                      optionB: lp.poll.optionB.text,
+                    }
+                  : undefined,
+              qaCard: lp.qaCard,
             }).catch(() => {});
           }
           if (
