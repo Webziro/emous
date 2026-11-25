@@ -27,6 +27,8 @@ import {
   Send,
   Clock,
   Eye,
+  Gift,
+  Wallet,
 } from 'lucide-react';
 import {
   ALL_BACKGROUNDS,
@@ -35,7 +37,9 @@ import {
   CardBackground,
   classifyPostTopics,
   CURATED_GRADIENTS,
+  HostSessionDTO,
   InboxMessageDTO,
+  NIGERIAN_BANKS,
   POPULAR_TAGS,
   PostDTO,
   REACTION_META,
@@ -45,6 +49,7 @@ import {
   TrendingPhraseItem,
   TrendingTagItem,
   UserIdentityDTO,
+  WHATSAPP_GAME_SCRIPTS,
   addPostComment,
   createPost,
   fetchInbox,
@@ -52,12 +57,15 @@ import {
   fetchTrendingData,
   flagInboxMessage,
   flagPost,
+  getOrStartHostSession,
   getSavedHandleHistory,
   initZeroFrictionIdentity,
+  pingAnalytics,
   reactToPost,
   replyToInboxMessage,
   rerollHandle,
   shuffleCardBackground,
+  submitRewardClaim,
   switchToSavedHandle,
   voteOnPostPoll,
 } from '@/lib/api-bundle';
@@ -221,15 +229,147 @@ function wrapCanvasText(
   return currentY + lineHeight;
 }
 
-function downloadStoryPng(params: {
+function triggerPngDownload(canvas: HTMLCanvasElement, filename: string) {
+  canvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    },
+    'image/png',
+    1.0
+  );
+}
+
+/**
+ * Clean 1080x1080 message-only PNG image download (zero promo badges or auto-reply icons).
+ * If user typed a real reply, includes only the clean message + real reply.
+ */
+function downloadCleanMessagePng(params: {
   handle: string;
   question: string;
-  reply: string;
+  reply?: string;
   themeId: string;
 }) {
   const theme =
     STORY_COLOR_PAIRS.find((t) => t.id === params.themeId) ||
     STORY_COLOR_PAIRS[0];
+  const cleanReply = (params.reply || '').trim();
+  const hasRealReply = cleanReply.length > 0;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = hasRealReply ? 1280 : 1080;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.fillStyle = theme.canvasBg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cardX = 80;
+  const cardW = 920;
+
+  if (!hasRealReply) {
+    const cardY = 120;
+    const cardH = 840;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 18, cardY + 18, cardW, cardH);
+    ctx.fillStyle = theme.topCardBg;
+    ctx.fillRect(cardX, cardY, cardW, cardH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+    ctx.fillStyle = theme.topCardText;
+    ctx.font = '800 54px sans-serif';
+    ctx.textAlign = 'left';
+    wrapCanvasText(
+      ctx,
+      `“${params.question}”`,
+      cardX + 64,
+      cardY + 190,
+      cardW - 128,
+      74
+    );
+  } else {
+    const topY = 90;
+    const topH = 520;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 16, topY + 16, cardW, topH);
+    ctx.fillStyle = theme.topCardBg;
+    ctx.fillRect(cardX, topY, cardW, topH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, topY, cardW, topH);
+
+    ctx.fillStyle = theme.topCardText;
+    ctx.font = '800 46px sans-serif';
+    ctx.textAlign = 'left';
+    wrapCanvasText(
+      ctx,
+      `“${params.question}”`,
+      cardX + 55,
+      topY + 135,
+      cardW - 110,
+      64
+    );
+
+    const botY = 660;
+    const botH = 520;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 16, botY + 16, cardW, botH);
+    ctx.fillStyle = theme.bottomCardBg;
+    ctx.fillRect(cardX, botY, cardW, botH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, botY, cardW, botH);
+
+    ctx.fillStyle = theme.bottomCardText;
+    ctx.font = '800 46px sans-serif';
+    wrapCanvasText(
+      ctx,
+      cleanReply,
+      cardX + 55,
+      botY + 135,
+      cardW - 110,
+      64
+    );
+  }
+
+  triggerPngDownload(
+    canvas,
+    `emous-message-${params.handle.toLowerCase()}.png`
+  );
+}
+
+/**
+ * 9:16 Story PNG export — NEVER invents fake emoji replies.
+ * Only renders a reply card if the user actually typed a real reply.
+ */
+function downloadStoryPng(params: {
+  handle: string;
+  question: string;
+  reply?: string;
+  themeId: string;
+}) {
+  const theme =
+    STORY_COLOR_PAIRS.find((t) => t.id === params.themeId) ||
+    STORY_COLOR_PAIRS[0];
+  const cleanReply = (params.reply || '').trim();
+  const hasRealReply = cleanReply.length > 0;
+
   const canvas = document.createElement('canvas');
   canvas.width = 1080;
   canvas.height = 1920;
@@ -239,78 +379,89 @@ function downloadStoryPng(params: {
   ctx.fillStyle = theme.canvasBg;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  ctx.fillStyle = '#FFE600';
-  ctx.fillRect(290, 120, 500, 76);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(290, 120, 500, 76);
-  ctx.fillStyle = '#0D0D11';
-  ctx.font = '900 32px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`ASK @${params.handle.toUpperCase()}`, 540, 170);
-
   const cardX = 90;
-  const topCardY = 270;
   const cardW = 900;
-  const topCardH = 620;
 
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(cardX + 18, topCardY + 18, cardW, topCardH);
-  ctx.fillStyle = theme.topCardBg;
-  ctx.fillRect(cardX, topCardY, cardW, topCardH);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(cardX, topCardY, cardW, topCardH);
+  if (hasRealReply) {
+    const topCardY = 250;
+    const topCardH = 620;
 
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(cardX + 45, topCardY + 45, 360, 60);
-  ctx.fillStyle = '#CCFF00';
-  ctx.font = '800 26px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('🤫 ANONYMOUS CONFESSION', cardX + 68, topCardY + 84);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 18, topCardY + 18, cardW, topCardH);
+    ctx.fillStyle = theme.topCardBg;
+    ctx.fillRect(cardX, topCardY, cardW, topCardH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, topCardY, cardW, topCardH);
 
-  ctx.fillStyle = theme.topCardText;
-  ctx.font = '800 48px sans-serif';
-  wrapCanvasText(
-    ctx,
-    `"${params.question}"`,
-    cardX + 55,
-    topCardY + 195,
-    cardW - 110,
-    66
-  );
+    ctx.fillStyle = theme.topCardText;
+    ctx.font = '800 48px sans-serif';
+    ctx.textAlign = 'left';
+    wrapCanvasText(
+      ctx,
+      `“${params.question}”`,
+      cardX + 55,
+      topCardY + 160,
+      cardW - 110,
+      66
+    );
 
-  const bottomCardY = 960;
-  const bottomCardH = 620;
+    const bottomCardY = 940;
+    const bottomCardH = 620;
 
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(cardX + 18, bottomCardY + 18, cardW, bottomCardH);
-  ctx.fillStyle = theme.bottomCardBg;
-  ctx.fillRect(cardX, bottomCardY, cardW, bottomCardH);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(cardX, bottomCardY, cardW, bottomCardH);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 18, bottomCardY + 18, cardW, bottomCardH);
+    ctx.fillStyle = theme.bottomCardBg;
+    ctx.fillRect(cardX, bottomCardY, cardW, bottomCardH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, bottomCardY, cardW, bottomCardH);
 
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(cardX + 45, bottomCardY + 45, 340, 60);
-  ctx.fillStyle = '#FFE600';
-  ctx.font = '800 26px sans-serif';
-  ctx.fillText(
-    `⚡ @${params.handle.toUpperCase()} REPLIED`,
-    cardX + 68,
-    bottomCardY + 84
-  );
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 45, bottomCardY + 45, 340, 56);
+    ctx.fillStyle = '#FFE600';
+    ctx.font = '800 24px sans-serif';
+    ctx.fillText(
+      `@${params.handle.toUpperCase()} REPLIED`,
+      cardX + 68,
+      bottomCardY + 82
+    );
 
-  ctx.fillStyle = theme.bottomCardText;
-  ctx.font = '800 50px sans-serif';
-  wrapCanvasText(
-    ctx,
-    params.reply,
-    cardX + 55,
-    bottomCardY + 195,
-    cardW - 110,
-    68
-  );
+    ctx.fillStyle = theme.bottomCardText;
+    ctx.font = '800 50px sans-serif';
+    wrapCanvasText(
+      ctx,
+      cleanReply,
+      cardX + 55,
+      bottomCardY + 185,
+      cardW - 110,
+      68
+    );
+  } else {
+    // Message only — clean centered card with zero auto-reply or social icons
+    const topCardY = 440;
+    const topCardH = 820;
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + 18, topCardY + 18, cardW, topCardH);
+    ctx.fillStyle = theme.topCardBg;
+    ctx.fillRect(cardX, topCardY, cardW, topCardH);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(cardX, topCardY, cardW, topCardH);
+
+    ctx.fillStyle = theme.topCardText;
+    ctx.font = '800 54px sans-serif';
+    ctx.textAlign = 'left';
+    wrapCanvasText(
+      ctx,
+      `“${params.question}”`,
+      cardX + 60,
+      topCardY + 210,
+      cardW - 120,
+      74
+    );
+  }
 
   ctx.fillStyle = '#FF1E8E';
   ctx.fillRect(220, 1690, 640, 110);
@@ -319,14 +470,11 @@ function downloadStoryPng(params: {
   ctx.strokeRect(220, 1690, 640, 110);
 
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 36px sans-serif';
+  ctx.font = '900 34px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(`${BRAND.domain}/${params.handle}`, 540, 1758);
 
-  const link = document.createElement('a');
-  link.download = `emous-story-${params.handle.toLowerCase()}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
+  triggerPngDownload(canvas, `emous-story-${params.handle.toLowerCase()}.png`);
 }
 
 function downloadFeedCardStoryPng(post: PostDTO) {
@@ -347,7 +495,7 @@ function downloadFeedCardStoryPng(post: PostDTO) {
   ctx.fillStyle = '#0D0D11';
   ctx.font = '900 34px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('🔥 EMOUS COMMUNITY FEED', 540, 184);
+  ctx.fillText('EMOUS COMMUNITY FEED', 540, 184);
 
   const cardX = 85;
   const cardY = 290;
@@ -376,7 +524,7 @@ function downloadFeedCardStoryPng(post: PostDTO) {
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '800 28px sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(`🎭 @${post.authorHandle}`, cardX + 80, cardY + 99);
+  ctx.fillText(`@${post.authorHandle}`, cardX + 80, cardY + 99);
 
   ctx.fillStyle = post.background?.textColor || '#FFFFFF';
   ctx.font = '900 52px sans-serif';
@@ -415,10 +563,7 @@ function downloadFeedCardStoryPng(post: PostDTO) {
   ctx.textAlign = 'center';
   ctx.fillText(`${BRAND.domain}/${post.authorHandle}`, 540, 1688);
 
-  const a = document.createElement('a');
-  a.download = `emous-card-${post.authorHandle.toLowerCase()}.png`;
-  a.href = canvas.toDataURL('image/png');
-  a.click();
+  triggerPngDownload(canvas, `emous-card-${post.authorHandle.toLowerCase()}.png`);
 }
 
 export interface ActivityNotification {
@@ -562,6 +707,18 @@ export default function EmousHomeApp() {
   const [handleHistory, setHandleHistory] = useState<string[]>([]);
   const [isHandleSwitcherOpen, setIsHandleSwitcherOpen] = useState(false);
 
+  // WhatsApp Group Admin Loyalty (₦2,000 for 30+ unique devices per 24h game session)
+  const [hostSession, setHostSession] = useState<HostSessionDTO | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState('My WhatsApp Squad');
+  const [selectedScriptIdx, setSelectedScriptIdx] = useState(0);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [claimBankName, setClaimBankName] = useState<string>(NIGERIAN_BANKS[0]);
+  const [claimAccountNumber, setClaimAccountNumber] = useState('');
+  const [claimAccountName, setClaimAccountName] = useState('');
+  const [claimWhatsappNumber, setClaimWhatsappNumber] = useState('');
+  const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
+
   const STORAGE_POSTS_CACHE = 'emous_permanent_feed_posts_v3';
   const STORAGE_INBOX_CACHE = 'emous_inbox_cache_v2';
   const STORAGE_REACTIONS_CACHE = 'emous_reactions_cache_v2';
@@ -624,12 +781,47 @@ export default function EmousHomeApp() {
           ? user.handleHistory
           : getSavedHandleHistory(user.handle)
       );
+      const sessionCode =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('g')?.trim().toUpperCase() || undefined
+          : undefined;
+      pingAnalytics({
+        eventType: 'page_view',
+        route: typeof window !== 'undefined' ? window.location.pathname : '/',
+        handle: user.handle,
+        sessionCode,
+      });
     });
   }, []);
 
   const currentHandle = demoGoldenWizardMode
     ? 'GoldenWizard'
     : identity?.handle || 'GoldenWizard';
+
+  const loadHostSession = useCallback(
+    async (forceNew = false) => {
+      if (!identity?.handle || demoGoldenWizardMode) return;
+      setIsLoadingSession(true);
+      try {
+        const s = await getOrStartHostSession({
+          handle: identity.handle,
+          groupName: groupNameInput.trim() || undefined,
+          forceNew,
+        });
+        setHostSession(s);
+      } catch {
+      } finally {
+        setIsLoadingSession(false);
+      }
+    },
+    [identity?.handle, demoGoldenWizardMode, groupNameInput]
+  );
+
+  useEffect(() => {
+    if (activeScreen === 'inbox' && identity?.handle && !demoGoldenWizardMode) {
+      loadHostSession(false);
+    }
+  }, [activeScreen, identity?.handle, demoGoldenWizardMode, loadHostSession]);
 
   // Wow Feature #6: Street Cred & Karma Score calculated from user's activity
   const myPosts = posts.filter(
@@ -1228,35 +1420,74 @@ export default function EmousHomeApp() {
     }
   };
 
-  const handleSaveReplyAndShare = async (downloadPngAfter = false) => {
+  const handleSaveReplyAndShare = async (
+    downloadMode: 'story' | 'clean-only'
+  ) => {
     if (!activeStoryMsg) return;
-    const cleanReply = replyText.trim() || '🤫🔥';
+    const cleanReply = replyText.trim();
     setIsSavingReply(true);
     try {
-      const updated = await replyToInboxMessage(
-        activeStoryMsg._id,
-        cleanReply,
-        storyThemeId
-      );
-      setActiveStoryMsg(updated);
-      setInboxMessages((prev) =>
-        prev.map((m) => (m._id === updated._id ? updated : m))
-      );
-      if (downloadPngAfter) {
-        downloadStoryPng({
+      let questionText = activeStoryMsg.question;
+      let savedReply = activeStoryMsg.reply || '';
+
+      if (cleanReply.length > 0) {
+        const updated = await replyToInboxMessage(
+          activeStoryMsg._id,
+          cleanReply,
+          storyThemeId
+        );
+        setActiveStoryMsg(updated);
+        setInboxMessages((prev) =>
+          prev.map((m) => (m._id === updated._id ? updated : m))
+        );
+        questionText = updated.question;
+        savedReply = updated.reply || cleanReply;
+      }
+
+      if (downloadMode === 'clean-only') {
+        downloadCleanMessagePng({
           handle: currentHandle,
-          question: updated.question,
-          reply: cleanReply,
+          question: questionText,
+          reply: savedReply,
           themeId: storyThemeId,
         });
-        showToast('📸 Downloaded 9:16 Story Image for IG/Snapchat!');
+        showToast('🖼️ Downloaded clean message image (.png)!');
       } else {
-        showToast('✨ Reply saved to your 9:16 Story Card!');
+        downloadStoryPng({
+          handle: currentHandle,
+          question: questionText,
+          reply: savedReply,
+          themeId: storyThemeId,
+        });
+        showToast('📸 Downloaded 9:16 Story image (.png)!');
       }
     } catch {
-      showToast('Could not save reply');
+      showToast('Could not save or download image');
     } finally {
       setIsSavingReply(false);
+    }
+  };
+
+  const handleSubmitRewardClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hostSession) return;
+    setIsSubmittingClaim(true);
+    try {
+      const res = await submitRewardClaim({
+        sessionCode: hostSession.sessionCode,
+        groupName: groupNameInput.trim() || hostSession.groupName || 'WhatsApp Group',
+        bankName: claimBankName,
+        accountNumber: claimAccountNumber.trim(),
+        accountName: claimAccountName.trim(),
+        whatsappNumber: claimWhatsappNumber.trim(),
+      });
+      setHostSession(res.session);
+      setIsClaimModalOpen(false);
+      showToast(res.message);
+    } catch (err: any) {
+      showToast(err?.message || 'Could not submit reward claim');
+    } finally {
+      setIsSubmittingClaim(false);
     }
   };
 
@@ -1356,18 +1587,18 @@ export default function EmousHomeApp() {
             </div>
           </div>
 
-          {/* Primary Screen Switcher: 4 Tabs (Feed | Trending | Inbox | + Card) */}
-          <div className="grid grid-cols-4 sm:flex items-center gap-1.5 sm:gap-2">
+          {/* Primary Screen Switcher: 4 Tabs (Feed | Trends | Inbox | + Card) — fully visible on narrow mobile */}
+          <div className="grid grid-cols-4 sm:flex items-center gap-1 sm:gap-2">
             <button
               onClick={() => setActiveScreen('feed')}
-              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
+              className={`px-1 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 ${
                 activeScreen === 'feed'
                   ? 'bg-emous-pink text-white'
                   : 'bg-emous-surface text-white'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Feed</span>
+              <Flame className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+              <span>Feed</span>
             </button>
 
             <button
@@ -1375,26 +1606,26 @@ export default function EmousHomeApp() {
                 setActiveScreen('trending');
                 loadTrending();
               }}
-              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 truncate ${
+              className={`px-1 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 ${
                 activeScreen === 'trending'
                   ? 'bg-emous-yellow text-black'
                   : 'bg-emous-surface text-white'
               }`}
             >
-              <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Trending</span>
+              <TrendingUp className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+              <span>Trends</span>
             </button>
 
             <button
               onClick={() => setActiveScreen('inbox')}
-              className={`px-2 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 relative truncate ${
+              className={`px-1 sm:px-3.5 py-2 rounded-xl font-display font-extrabold text-[10px] sm:text-xs uppercase flyer-btn flex items-center justify-center gap-1 relative ${
                 activeScreen === 'inbox'
                   ? 'bg-emous-lime text-black'
                   : 'bg-emous-surface text-white'
               }`}
             >
-              <MessageSquareHeart className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Inbox</span>
+              <MessageSquareHeart className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+              <span>Inbox</span>
               {inboxMessages.length > 0 && (
                 <span className="bg-emous-pink text-white border border-black text-[9px] font-extrabold px-1 rounded-full shrink-0">
                   {inboxMessages.length}
@@ -1404,10 +1635,10 @@ export default function EmousHomeApp() {
 
             <button
               onClick={() => setIsComposerOpen(true)}
-              className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-2 sm:px-3.5 py-2 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 truncate"
+              className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-1 sm:px-3.5 py-2 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
-              <span className="truncate">Card</span>
+              <span>Card</span>
             </button>
           </div>
         </div>
@@ -1968,15 +2199,15 @@ export default function EmousHomeApp() {
           SCREEN 2: "GET YOUR LINK" INBOX DASHBOARD (with 30d Countdown & Hints)
          ===================================================================== */}
       {activeScreen === 'inbox' && (
-        <main className="max-w-4xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-6">
-          <div className="bg-emous-lime text-black rounded-2xl sm:rounded-3xl p-4 sm:p-5 flyer-card relative overflow-hidden">
+        <main className="max-w-4xl mx-auto px-3 sm:px-4 pt-4 sm:pt-6 space-y-5">
+          <div className="bg-emous-lime text-black rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flyer-card">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5">
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="inline-flex items-center gap-1.5 bg-black text-emous-yellow text-[10px] font-display font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-                  <Sparkles className="w-3 h-3" />
+              <div className="space-y-1.5 w-full">
+                <div className="inline-flex items-center gap-1.5 bg-black text-emous-yellow text-[10px] sm:text-xs font-display font-extrabold px-2.5 py-0.5 rounded-full uppercase">
+                  <Sparkles className="w-3 h-3 shrink-0" />
                   <span>30-DAY AUTO-BURN SECRET INBOX</span>
                 </div>
-                <h1 className="font-display font-extrabold text-xs sm:text-base md:text-lg leading-snug truncate">
+                <h1 className="font-display font-extrabold text-sm sm:text-base md:text-lg leading-snug whitespace-normal break-words">
                   {BRAND.inboxHook}
                 </h1>
               </div>
@@ -1991,30 +2222,28 @@ export default function EmousHomeApp() {
               </button>
             </div>
 
-            <div className="mt-3 bg-white rounded-xl p-2.5 sm:p-3 border-2 border-black shadow-brutal flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2.5 px-2 overflow-hidden">
-                <span className="bg-emous-pink text-white font-display font-extrabold text-xs px-2.5 py-1 rounded-lg border-2 border-black shrink-0">
-                  LINK
-                </span>
-                <span className="font-display font-extrabold text-sm sm:text-xl text-black truncate">
+            {/* White Inbox Link Box: No "LINK" badge — URL on top + 3 single-row bold-icon action buttons */}
+            <div className="mt-3 bg-white rounded-xl p-2.5 sm:p-3.5 border-2 border-black shadow-brutal space-y-2.5">
+              <div className="px-1 text-center sm:text-left">
+                <span className="font-display font-extrabold text-sm sm:text-lg text-black break-all">
                   {BRAND.domain}/{currentHandle}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full">
                 <button
                   onClick={handleCopyInboxLink}
-                  className="flex-1 sm:flex-initial bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm px-4 py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1.5"
+                  className="bg-emous-pink text-white font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
                 >
                   {copiedLink ? (
                     <>
-                      <Check className="w-4 h-4" />
-                      <span>Copied!</span>
+                      <Check className="w-4 h-4 shrink-0 stroke-[3]" />
+                      <span>Copied</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" />
-                      <span>Copy My Link 🔗</span>
+                      <Copy className="w-4 h-4 shrink-0 stroke-[2.75]" />
+                      <span>Copy</span>
                     </>
                   )}
                 </button>
@@ -2025,17 +2254,18 @@ export default function EmousHomeApp() {
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-black text-emous-lime font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
+                  className="bg-black text-emous-lime font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
                 >
-                  <span>💬 WhatsApp</span>
+                  <MessageCircle className="w-4 h-4 shrink-0 stroke-[2.75] fill-current" />
+                  <span>WhatsApp</span>
                 </a>
 
                 <Link
                   href={`/${currentHandle}`}
-                  className="bg-emous-yellow text-black font-display font-extrabold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flyer-btn inline-flex items-center gap-1.5"
+                  className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open Receiver</span>
+                  <ExternalLink className="w-4 h-4 shrink-0 stroke-[2.75]" />
+                  <span>Open</span>
                 </Link>
               </div>
             </div>
@@ -2077,6 +2307,168 @@ export default function EmousHomeApp() {
               </div>
             )}
           </div>
+
+          {/* WhatsApp Group Admin ₦2,000 Loyalty Host Session Card */}
+          {!demoGoldenWizardMode && (
+            <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-4 sm:p-5 flyer-card border-2 border-black space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-2.5 py-1 rounded-full border-2 border-black uppercase inline-flex items-center gap-1">
+                    <Gift className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>WhatsApp Admin Reward: ₦2,000</span>
+                  </span>
+                </div>
+                {hostSession && (
+                  <button
+                    type="button"
+                    onClick={() => loadHostSession(false)}
+                    className="text-[11px] font-bold text-emous-lime hover:underline inline-flex items-center gap-1"
+                  >
+                    <RefreshCw
+                      className={`w-3 h-3 ${isLoadingSession ? 'animate-spin' : ''}`}
+                    />
+                    <span>Sync Players</span>
+                  </button>
+                )}
+              </div>
+
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                Host an anonymous game in your WhatsApp group! Get{' '}
+                <strong className="text-emous-lime">
+                  30+ unique group members
+                </strong>{' '}
+                to join your tracked game link in 24h and claim{' '}
+                <strong className="text-emous-yellow">₦2,000 cash</strong> via
+                bank transfer.
+              </p>
+
+              {hostSession && (
+                <div className="bg-black/80 rounded-2xl p-3.5 border border-white/15 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-extrabold">
+                    <span className="text-white">
+                      Session{' '}
+                      <span className="text-emous-yellow">
+                        {hostSession.sessionCode}
+                      </span>
+                    </span>
+                    <span className="text-emous-lime">
+                      {hostSession.uniqueDeviceCount} /{' '}
+                      {hostSession.targetDevices} Unique Players
+                    </span>
+                  </div>
+
+                  <div className="h-3 bg-neutral-900 rounded-full overflow-hidden border border-white/15">
+                    <div
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (hostSession.uniqueDeviceCount /
+                              hostSession.targetDevices) *
+                              100
+                          )
+                        )}%`,
+                      }}
+                      className="h-full bg-emous-pink transition-all duration-300"
+                    />
+                  </div>
+
+                  {/* Quick Script Picker + Share to Group */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {WHATSAPP_GAME_SCRIPTS.map((sc, idx) => (
+                        <button
+                          key={sc.id}
+                          type="button"
+                          onClick={() => setSelectedScriptIdx(idx)}
+                          className={`text-[10px] font-display font-extrabold px-2.5 py-1 rounded-full border border-black ${
+                            selectedScriptIdx === idx
+                              ? 'bg-emous-yellow text-black'
+                              : 'bg-emous-surface text-neutral-300'
+                          }`}
+                        >
+                          {sc.title}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const script =
+                            WHATSAPP_GAME_SCRIPTS[selectedScriptIdx] ||
+                            WHATSAPP_GAME_SCRIPTS[0];
+                          const msg = script.buildText(
+                            currentHandle,
+                            hostSession.shareUrl
+                          );
+                          navigator.clipboard?.writeText(msg);
+                          showToast(
+                            '📋 Copied WhatsApp game prompt + tracked link!'
+                          );
+                        }}
+                        className="bg-white text-black font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black inline-flex items-center justify-center gap-1"
+                      >
+                        <Copy className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Copy Group Prompt</span>
+                      </button>
+
+                      <a
+                        href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                          (
+                            WHATSAPP_GAME_SCRIPTS[selectedScriptIdx] ||
+                            WHATSAPP_GAME_SCRIPTS[0]
+                          ).buildText(currentHandle, hostSession.shareUrl)
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-emous-lime text-black font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black inline-flex items-center justify-center gap-1"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Launch in WhatsApp</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Claim Button / Paid Status */}
+                  {hostSession.claimStatus === 'paid' ? (
+                    <div className="bg-emous-lime text-black rounded-xl px-3 py-2 text-xs font-extrabold text-center">
+                      ✓ ₦2,000 PAID!{' '}
+                      {hostSession.claimReference
+                        ? `(Ref: ${hostSession.claimReference})`
+                        : ''}
+                    </div>
+                  ) : hostSession.claimStatus === 'pending' ? (
+                    <div className="bg-emous-yellow text-black rounded-xl px-3 py-2 text-xs font-extrabold text-center">
+                      ⏳ Claim Submitted — Founder Verifying Bank Transfer (₦2,000)
+                    </div>
+                  ) : hostSession.uniqueDeviceCount >= hostSession.targetDevices ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsClaimModalOpen(true)}
+                      className="w-full bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm py-2.5 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1.5 animate-pulse"
+                    >
+                      <Wallet className="w-4 h-4" />
+                      <span>🎉 30/30 Reached! Claim ₦2,000 Reward</span>
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-neutral-400 text-center">
+                      Need{' '}
+                      <strong className="text-white">
+                        {Math.max(
+                          0,
+                          hostSession.targetDevices -
+                            hostSession.uniqueDeviceCount
+                        )}
+                      </strong>{' '}
+                      more unique devices in this session to unlock ₦2,000 payout
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Inbox Secret Notes Grid */}
           <div className="space-y-4">
@@ -2618,45 +3010,38 @@ export default function EmousHomeApp() {
             <div className="flex justify-center">
               <div
                 style={{ backgroundColor: activeStoryTheme.canvasBg }}
-                className="w-[250px] h-[444px] rounded-3xl p-4 flyer-card flex flex-col justify-between relative overflow-hidden select-none"
+                className="w-[250px] h-[444px] rounded-3xl p-4 flyer-card flex flex-col justify-center gap-4 relative overflow-hidden select-none"
               >
-                <div className="text-center">
-                  <span className="inline-block bg-emous-yellow text-black font-display font-extrabold text-[10px] uppercase px-3 py-1 rounded-md border-2 border-black shadow-brutal">
-                    ASK @{currentHandle}
-                  </span>
-                </div>
-
                 <div
                   style={{
                     backgroundColor: activeStoryTheme.topCardBg,
                     color: activeStoryTheme.topCardText,
                   }}
-                  className="rounded-2xl p-3.5 border-2 border-black shadow-brutal space-y-1.5"
+                  className="rounded-2xl p-4 border-2 border-black shadow-brutal space-y-1.5"
                 >
-                  <span className="inline-block bg-black text-emous-lime text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
-                    🤫 ANONYMOUS CONFESSION
-                  </span>
-                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-4">
+                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-5">
                     “{activeStoryMsg.question}”
                   </p>
                 </div>
 
-                <div
-                  style={{
-                    backgroundColor: activeStoryTheme.bottomCardBg,
-                    color: activeStoryTheme.bottomCardText,
-                  }}
-                  className="rounded-2xl p-3.5 border-2 border-black shadow-brutal space-y-1.5"
-                >
-                  <span className="inline-block bg-black text-emous-yellow text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
-                    ⚡ @{currentHandle} REPLIED
-                  </span>
-                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-4">
-                    {replyText.trim() || 'Type your reply on the right... 👀'}
-                  </p>
-                </div>
+                {replyText.trim().length > 0 && (
+                  <div
+                    style={{
+                      backgroundColor: activeStoryTheme.bottomCardBg,
+                      color: activeStoryTheme.bottomCardText,
+                    }}
+                    className="rounded-2xl p-4 border-2 border-black shadow-brutal space-y-1.5"
+                  >
+                    <span className="inline-block bg-black text-emous-yellow text-[9px] font-extrabold uppercase px-2 py-0.5 rounded">
+                      @{currentHandle} REPLIED
+                    </span>
+                    <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug line-clamp-4">
+                      {replyText.trim()}
+                    </p>
+                  </div>
+                )}
 
-                <div className="text-center">
+                <div className="text-center pt-2">
                   <span className="inline-block bg-emous-pink text-white font-display font-extrabold text-[10px] px-3 py-1 rounded-full border-2 border-black">
                     {BRAND.domain}/{currentHandle}
                   </span>
@@ -2739,10 +3124,10 @@ export default function EmousHomeApp() {
                 <button
                   type="button"
                   disabled={isSavingReply}
-                  onClick={() => handleSaveReplyAndShare(true)}
+                  onClick={() => handleSaveReplyAndShare('story')}
                   className="w-full bg-emous-pink text-white font-display font-extrabold text-sm py-3 px-5 rounded-2xl flyer-btn uppercase flex items-center justify-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4 stroke-[2.5]" />
                   <span>Download 9:16 Story Image (PNG)</span>
                 </button>
 
@@ -2760,10 +3145,11 @@ export default function EmousHomeApp() {
                 <button
                   type="button"
                   disabled={isSavingReply}
-                  onClick={() => handleSaveReplyAndShare(false)}
-                  className="w-full bg-emous-lime text-black font-display font-extrabold text-xs py-2 px-4 rounded-xl flyer-btn uppercase"
+                  onClick={() => handleSaveReplyAndShare('clean-only')}
+                  className="w-full bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1.5"
                 >
-                  Save Reply Only
+                  <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Save & Download Message Only (PNG)</span>
                 </button>
               </div>
             </div>
@@ -2871,6 +3257,128 @@ export default function EmousHomeApp() {
                 Keep @{currentHandle}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL 6: WHATSAPP GROUP ADMIN ₦2,000 REWARD BANK CLAIM FORM
+         ===================================================================== */}
+      {isClaimModalOpen && hostSession && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-emous-surface w-full max-w-md rounded-3xl p-5 flyer-card space-y-4 my-auto border-2 border-black">
+            <div className="flex items-center justify-between">
+              <span className="bg-emous-lime text-black font-display font-extrabold text-xs uppercase px-3 py-1 rounded-full border-2 border-black">
+                💰 CLAIM ₦2,000 ADMIN REWARD
+              </span>
+              <button
+                onClick={() => setIsClaimModalOpen(false)}
+                className="bg-black text-white p-1.5 rounded-xl border-2 border-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-black/80 rounded-2xl p-3 border border-emous-lime/40 text-xs space-y-1">
+              <p className="font-extrabold text-emous-lime">
+                ✓ Qualified Session: {hostSession.sessionCode} (
+                {hostSession.uniqueDeviceCount}/{hostSession.targetDevices}{' '}
+                Unique Devices)
+              </p>
+              <p className="text-neutral-300">
+                Enter your Nigerian Bank / OPay / Kuda details below. After manual
+                verification, ₦2,000 is transferred directly to your account!
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitRewardClaim} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-neutral-300 mb-1">
+                  WhatsApp Group Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={groupNameInput}
+                  onChange={(e) => setGroupNameInput(e.target.value)}
+                  placeholder="e.g. UNILAG Tech Hangout / Squad"
+                  className="w-full bg-black text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/25"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-neutral-300 mb-1">
+                  Select Bank / Wallet
+                </label>
+                <select
+                  value={claimBankName}
+                  onChange={(e) => setClaimBankName(e.target.value)}
+                  className="w-full bg-black text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/25"
+                >
+                  {NIGERIAN_BANKS.map((bank) => (
+                    <option key={bank} value={bank}>
+                      {bank}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase text-neutral-300 mb-1">
+                    10-Digit Account Number
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={10}
+                    value={claimAccountNumber}
+                    onChange={(e) =>
+                      setClaimAccountNumber(e.target.value.replace(/\D/g, ''))
+                    }
+                    placeholder="8012345678"
+                    className="w-full bg-black text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/25"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase text-neutral-300 mb-1">
+                    WhatsApp Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={claimWhatsappNumber}
+                    onChange={(e) => setClaimWhatsappNumber(e.target.value)}
+                    placeholder="08012345678"
+                    className="w-full bg-black text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/25"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-neutral-300 mb-1">
+                  Account Holder Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={claimAccountName}
+                  onChange={(e) => setClaimAccountName(e.target.value)}
+                  placeholder="Full Name on Account"
+                  className="w-full bg-black text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/25"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingClaim}
+                className="w-full bg-emous-pink text-white font-display font-extrabold text-sm py-3 rounded-2xl flyer-btn uppercase disabled:opacity-50"
+              >
+                {isSubmittingClaim
+                  ? 'Submitting...'
+                  : 'Submit ₦2,000 Payout Request 🚀'}
+              </button>
+            </form>
           </div>
         </div>
       )}

@@ -1,10 +1,12 @@
 import {
   ALL_BACKGROUNDS,
+  AnalyticsSummaryDTO,
   CardBackground,
   classifyPostTopics,
   CURATED_GRADIENTS,
   CURATED_UNSPLASH_IMAGES,
   generateRandomHandle,
+  HostSessionDTO,
   InboxMessageDTO,
   POPULAR_TAGS,
   PostCommentDTO,
@@ -12,6 +14,7 @@ import {
   PostPollDTO,
   ReactionCounts,
   ReactionType,
+  RewardClaimDTO,
   TrendingPhraseItem,
   TrendingTagItem,
   UserIdentityDTO,
@@ -811,7 +814,8 @@ export async function sendAnonymousInboxMessage(
   recipientHandle: string,
   question: string,
   themeId?: string,
-  burnAfterReading?: boolean
+  burnAfterReading?: boolean,
+  sessionCode?: string
 ): Promise<{
   success: boolean;
   message: string;
@@ -832,6 +836,14 @@ export async function sendAnonymousInboxMessage(
           themeId,
           burnAfterReading: Boolean(burnAfterReading),
           deviceId,
+          sessionCode,
+          source:
+            typeof document !== 'undefined' &&
+            document.referrer.toLowerCase().includes('whatsapp')
+              ? 'whatsapp'
+              : sessionCode
+              ? 'whatsapp'
+              : 'direct',
         }),
       }
     );
@@ -919,6 +931,179 @@ export async function flagInboxMessage(
   });
   if (!res.ok) throw new Error('Failed to flag message');
   return res.json();
+}
+
+// ============================================================================
+// Analytics & WhatsApp Group Admin ₦2,000 Loyalty API Helpers
+// ============================================================================
+
+export function detectTrafficSource(): string {
+  if (typeof window === 'undefined') return 'direct';
+  const ref = (document.referrer || '').toLowerCase();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('g') || ref.includes('whatsapp') || ref.includes('wa.me')) {
+    return 'whatsapp';
+  }
+  if (ref.includes('twitter') || ref.includes('t.co') || ref.includes('x.com')) {
+    return 'twitter';
+  }
+  if (ref.includes('instagram')) return 'instagram';
+  return 'direct';
+}
+
+export async function pingAnalytics(params: {
+  eventType:
+    | 'page_view'
+    | 'receiver_open'
+    | 'post_create'
+    | 'inbox_send'
+    | 'comment_add'
+    | 'share_click';
+  route?: string;
+  handle?: string;
+  sessionCode?: string;
+}) {
+  const deviceId = getOrCreateDeviceId();
+  if (!deviceId || deviceId === 'ssr-device') return;
+  try {
+    await fetch(`${API_BASE}/analytics/ping`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId,
+      },
+      body: JSON.stringify({
+        deviceId,
+        eventType: params.eventType,
+        route: params.route || '/',
+        handle: params.handle,
+        sessionCode: params.sessionCode,
+        source: detectTrafficSource(),
+      }),
+    });
+  } catch {
+    // Non-fatal analytics ping
+  }
+}
+
+export async function getOrStartHostSession(params: {
+  handle: string;
+  groupName?: string;
+  forceNew?: boolean;
+}): Promise<HostSessionDTO> {
+  const deviceId = getOrCreateDeviceId();
+  const res = await fetch(`${API_BASE}/loyalty/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-device-id': deviceId,
+    },
+    body: JSON.stringify({
+      deviceId,
+      handle: params.handle,
+      groupName: params.groupName,
+      forceNew: params.forceNew,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Could not start game session');
+  }
+  const data = await res.json();
+  return data.session;
+}
+
+export async function trackLoyaltyPlayer(params: {
+  sessionCode?: string;
+  handle?: string;
+}) {
+  const deviceId = getOrCreateDeviceId();
+  try {
+    await fetch(`${API_BASE}/loyalty/track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId,
+      },
+      body: JSON.stringify({
+        deviceId,
+        sessionCode: params.sessionCode,
+        handle: params.handle,
+      }),
+    });
+  } catch {}
+}
+
+export async function submitRewardClaim(payload: {
+  sessionCode: string;
+  groupName: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  whatsappNumber: string;
+}): Promise<{ message: string; claim: RewardClaimDTO; session: HostSessionDTO }> {
+  const deviceId = getOrCreateDeviceId();
+  const res = await fetch(`${API_BASE}/loyalty/claim`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-device-id': deviceId,
+    },
+    body: JSON.stringify({ ...payload, deviceId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to submit reward claim');
+  }
+  return data;
+}
+
+export async function fetchAnalyticsSummary(
+  adminSecret: string,
+  days = 14
+): Promise<AnalyticsSummaryDTO> {
+  const res = await fetch(`${API_BASE}/analytics/summary?days=${days}`, {
+    headers: { 'x-admin-secret': adminSecret },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unauthorized');
+  return data;
+}
+
+export async function fetchAdminClaims(adminSecret: string): Promise<{
+  claims: RewardClaimDTO[];
+  sessions: HostSessionDTO[];
+}> {
+  const res = await fetch(`${API_BASE}/loyalty/admin/claims`, {
+    headers: { 'x-admin-secret': adminSecret },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unauthorized');
+  return data;
+}
+
+export async function updateAdminClaimStatus(
+  adminSecret: string,
+  claimId: string,
+  payload: {
+    status: 'paid' | 'rejected';
+    paymentReference?: string;
+    adminNote?: string;
+  }
+): Promise<{ claim: RewardClaimDTO }> {
+  const res = await fetch(`${API_BASE}/loyalty/admin/claims/${claimId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-secret': adminSecret,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to update claim');
+  return data;
 }
 
 export { POPULAR_TAGS };

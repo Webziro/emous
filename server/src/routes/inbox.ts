@@ -10,6 +10,7 @@ import {
   saveLocalStore,
 } from '../db';
 import { createRateLimiter, inspectAndSanitizeText } from '../safety';
+import { recordAnalyticsEvent } from '../telemetry';
 import { BRAND, STORY_COLOR_PAIRS } from '../../../shared';
 
 export const inboxRouter = Router();
@@ -242,6 +243,18 @@ inboxRouter.post(
         isHidden: false,
       });
 
+      if (senderDeviceId) {
+        recordAnalyticsEvent({
+          req,
+          deviceId: senderDeviceId,
+          eventType: 'inbox_send',
+          route: `/ask/${canonicalHandle}`,
+          handle: canonicalHandle,
+          sessionCode: (req.body?.sessionCode as string) || undefined,
+          source: (req.body?.source as string) || 'direct',
+        }).catch(() => {});
+      }
+
       return res.status(201).json({
         success: true,
         message: `Secret message safely delivered to @${canonicalHandle}! 🚀`,
@@ -275,6 +288,18 @@ inboxRouter.post(
 
     localStore.inbox.unshift(created);
     saveLocalStore();
+
+    if (senderDeviceId) {
+      recordAnalyticsEvent({
+        req,
+        deviceId: senderDeviceId,
+        eventType: 'inbox_send',
+        route: `/ask/${canonicalHandle}`,
+        handle: canonicalHandle,
+        sessionCode: (req.body?.sessionCode as string) || undefined,
+        source: (req.body?.source as string) || 'direct',
+      }).catch(() => {});
+    }
 
     return res.status(201).json({
       success: true,

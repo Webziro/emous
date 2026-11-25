@@ -821,3 +821,126 @@ export interface InboxMessageDTO {
   createdAt: string;
   expiresAt: string;
 }
+
+export const LOYALTY_TARGET_DEVICES = 30;
+export const LOYALTY_REWARD_NAIRA = 2000;
+
+export const NIGERIAN_BANKS = [
+  'OPay',
+  'PalmPay',
+  'Kuda Bank',
+  'Moniepoint MFB',
+  'GTBank',
+  'Access Bank',
+  'Zenith Bank',
+  'First Bank',
+  'UBA',
+  'Fidelity Bank',
+  'Wema Bank',
+  'Sterling Bank',
+  'Union Bank',
+  'Stanbic IBTC',
+  'FCMB',
+  'Other Bank',
+] as const;
+
+export const WHATSAPP_GAME_SCRIPTS = [
+  {
+    id: 'midnight-confession',
+    title: 'Midnight Confession Night',
+    buildText: (handle: string, shareUrl: string) =>
+      `🔥 TONIGHT'S GROUP GAME ON EMOUS! 🔥\nDrop one anonymous confession, crush, or honest truth about this group — nobody knows who sent it!\n\n👇 Drop yours in @${handle}'s box:\n${shareUrl}`,
+  },
+  {
+    id: 'unpopular-roast',
+    title: 'Group Truth or Roast',
+    buildText: (handle: string, shareUrl: string) =>
+      `👀 ZERO-FILTER ANONYMOUS ROAST SESSION!\nSay what you’ve been holding back in this group chat. 100% anonymous, auto-burns in 30 days 🔥\n\n👉 Send secretly to @${handle}:\n${shareUrl}`,
+  },
+  {
+    id: 'campus-tea',
+    title: 'Campus & Hostel Tea',
+    buildText: (handle: string, shareUrl: string) =>
+      `🎓 CAMPUS / SQUAD SECRETS ROOM IS LIVE!\nGist, crushes, or unpopular opinions — zero login needed.\n\n👇 Drop your tea here:\n${shareUrl}`,
+  },
+] as const;
+
+export interface HostSessionDTO {
+  _id: string;
+  sessionCode: string;
+  hostHandle: string;
+  groupName?: string;
+  uniqueDeviceCount: number;
+  targetDevices: number;
+  rewardNaira: number;
+  status: 'active' | 'qualified' | 'claimed' | 'paid' | 'rejected';
+  shareUrl: string;
+  claimStatus?: 'none' | 'pending' | 'paid' | 'rejected';
+  claimReference?: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface RewardClaimDTO {
+  _id: string;
+  sessionCode: string;
+  hostDeviceId: string;
+  hostHandle: string;
+  groupName: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  whatsappNumber: string;
+  uniqueDeviceCount: number;
+  uniqueIpCount: number;
+  sessionMinutes: number;
+  cities: string[];
+  fraudRisk: 'low' | 'medium' | 'high';
+  rewardNaira: number;
+  status: 'pending' | 'paid' | 'rejected';
+  paymentReference?: string;
+  adminNote?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface AnalyticsSummaryDTO {
+  overview: {
+    todayUniqueDevices: number;
+    last7dUniqueDevices: number;
+    allTimeUniqueDevices: number;
+    todayEvents: number;
+    allTimeEvents: number;
+    peakHour: number;
+    peakHourLabel: string;
+    totalPosts: number;
+    totalInboxNotes: number;
+    qualifiedHostsCount: number;
+    pendingClaimsCount: number;
+  };
+  dailyTrend: {
+    dateKey: string;
+    uniqueDevices: number;
+    events: number;
+    inboxSends: number;
+    postCreates: number;
+  }[];
+  hourlyHeatmap: {
+    hour: number;
+    label: string;
+    events: number;
+    uniqueDevices: number;
+  }[];
+  topLocations: {
+    location: string;
+    country: string;
+    city: string;
+    uniqueDevices: number;
+    events: number;
+  }[];
+  sourceBreakdown: {
+    source: string;
+    events: number;
+    uniqueDevices: number;
+  }[];
+}

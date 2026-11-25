@@ -8,6 +8,8 @@ import { identityRouter } from './routes/identity';
 import { postsRouter } from './routes/posts';
 import { inboxRouter } from './routes/inbox';
 import { backgroundsRouter } from './routes/backgrounds';
+import { analyticsRouter } from './routes/analytics';
+import { loyaltyRouter } from './routes/loyalty';
 import { securityMiddleware } from './safety';
 import { BRAND } from '../../shared';
 
@@ -37,7 +39,7 @@ export function createApp() {
     cors({
       origin: true,
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'x-device-id', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'x-device-id', 'x-admin-secret', 'Authorization'],
     })
   );
   app.use(express.json({ limit: '100kb' }));
@@ -58,6 +60,8 @@ export function createApp() {
   app.use('/api/v1/posts', postsRouter);
   app.use('/api/v1/inbox', inboxRouter);
   app.use('/api/v1/backgrounds', backgroundsRouter);
+  app.use('/api/v1/analytics', analyticsRouter);
+  app.use('/api/v1/loyalty', loyaltyRouter);
 
   // Serve Instant Web UI (/, /ask/:handle) directly from the unified server
   app.use(express.static(publicDir));

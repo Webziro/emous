@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { UserModel } from './models/User';
 import { PostModel } from './models/Post';
 import { InboxMessageModel } from './models/InboxMessage';
+import { AnalyticsEventModel, AnalyticsEventType } from './models/AnalyticsEvent';
+import { HostSessionModel, RewardClaimModel } from './models/Loyalty';
 import {
   BRAND,
   CardBackground,
@@ -103,10 +105,73 @@ export interface LocalInboxDoc {
   updatedAt: string;
 }
 
+export interface LocalAnalyticsDoc {
+  _id: string;
+  deviceId: string;
+  eventType: AnalyticsEventType;
+  route: string;
+  handle?: string;
+  sessionCode?: string;
+  country: string;
+  region: string;
+  city: string;
+  ipHash: string;
+  dateKey: string;
+  hourOfDay: number;
+  source: string;
+  createdAt: string;
+}
+
+export interface LocalHostSessionDoc {
+  _id: string;
+  sessionCode: string;
+  hostDeviceId: string;
+  hostHandle: string;
+  hostHandleLower: string;
+  groupName: string;
+  uniqueDevices: string[];
+  uniqueIpHashes: string[];
+  cities: string[];
+  eventTimestamps: string[];
+  targetDevices: number;
+  rewardNaira: number;
+  status: 'active' | 'qualified' | 'claimed' | 'paid' | 'rejected';
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocalRewardClaimDoc {
+  _id: string;
+  sessionCode: string;
+  hostDeviceId: string;
+  hostHandle: string;
+  groupName: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  whatsappNumber: string;
+  uniqueDeviceCount: number;
+  uniqueIpCount: number;
+  sessionMinutes: number;
+  cities: string[];
+  fraudRisk: 'low' | 'medium' | 'high';
+  rewardNaira: number;
+  status: 'pending' | 'paid' | 'rejected';
+  paymentReference?: string;
+  adminNote?: string;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface LocalDBState {
   users: LocalUserDoc[];
   posts: LocalPostDoc[];
   inbox: LocalInboxDoc[];
+  analytics: LocalAnalyticsDoc[];
+  hostSessions: LocalHostSessionDoc[];
+  rewardClaims: LocalRewardClaimDoc[];
 }
 
 const DATA_FILE = fs.existsSync(path.join(process.cwd(), 'data'))
@@ -117,6 +182,9 @@ export const localStore: LocalDBState = {
   users: [],
   posts: [],
   inbox: [],
+  analytics: [],
+  hostSessions: [],
+  rewardClaims: [],
 };
 
 let lastLoadedMtimeMs = 0;
@@ -143,6 +211,9 @@ export function reloadLocalStoreFromDiskIfNeeded(force = false) {
         };
       });
       localStore.inbox = raw.inbox || [];
+      localStore.analytics = raw.analytics || [];
+      localStore.hostSessions = raw.hostSessions || [];
+      localStore.rewardClaims = raw.rewardClaims || [];
       lastLoadedMtimeMs = stat.mtimeMs;
     }
   } catch {
@@ -220,6 +291,9 @@ export async function connectDatabase(): Promise<{
         UserModel.syncIndexes(),
         PostModel.syncIndexes(),
         InboxMessageModel.syncIndexes(),
+        AnalyticsEventModel.syncIndexes(),
+        HostSessionModel.syncIndexes(),
+        RewardClaimModel.syncIndexes(),
       ]);
       isMongoConnected = true;
       console.log('✅ Connected to MongoDB Atlas / URI with 2dsphere & 30-day TTL indexes');

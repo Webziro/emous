@@ -26,7 +26,7 @@ const nextConfig = {
         destination: '/ask/:handle',
       },
       {
-        source: '/:handle((?!api|_next|ask|feed|favicon\\.ico|styles\\.css|.*\\..*)[A-Za-z0-9_]{3,30})',
+        source: '/:handle((?!api|_next|ask|feed|admin|privacy|terms|favicon\\.ico|styles\\.css|.*\\..*)[A-Za-z0-9_]{3,30})',
         destination: '/ask/:handle',
       },
     ];

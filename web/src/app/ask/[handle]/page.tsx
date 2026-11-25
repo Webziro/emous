@@ -18,6 +18,7 @@ import {
   BRAND,
   STORY_COLOR_PAIRS,
   initZeroFrictionIdentity,
+  pingAnalytics,
   sendAnonymousInboxMessage,
 } from '@/lib/api-bundle';
 
@@ -43,6 +44,7 @@ export default function AskReceiverPage() {
   const [sentSuccess, setSentSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [senderHandle, setSenderHandle] = useState<string | null>(null);
+  const [sessionCode, setSessionCode] = useState<string | undefined>(undefined);
   const [floatingEmojis, setFloatingEmojis] = useState<
     { id: number; emoji: string; left: number }[]
   >([]);
@@ -50,8 +52,22 @@ export default function AskReceiverPage() {
   const activeTheme = STORY_COLOR_PAIRS[themeIndex % STORY_COLOR_PAIRS.length];
 
   useEffect(() => {
-    initZeroFrictionIdentity().then((id) => setSenderHandle(id.handle));
-  }, []);
+    const code =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('g')?.trim().toUpperCase() || undefined
+        : undefined;
+    setSessionCode(code);
+
+    initZeroFrictionIdentity().then((id) => {
+      setSenderHandle(id.handle);
+      pingAnalytics({
+        eventType: 'receiver_open',
+        route: typeof window !== 'undefined' ? window.location.pathname : `/${targetHandle}`,
+        handle: targetHandle,
+        sessionCode: code,
+      });
+    });
+  }, [targetHandle]);
 
   const triggerCelebration = () => {
     // 1. Confetti explosion
@@ -98,7 +114,8 @@ export default function AskReceiverPage() {
         targetHandle,
         question.trim(),
         activeTheme.id,
-        burnAfterReading
+        burnAfterReading,
+        sessionCode
       );
       setSentSuccess(true);
       setQuestion('');
