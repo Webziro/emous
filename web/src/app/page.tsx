@@ -3585,7 +3585,7 @@ export default function EmousHomeApp() {
         </div>
       )}
 
-      {/* Minimal Footer with Tiny Clickable T&C Link */}
+      {/* Minimal Footer with Tiny Clickable T&C & Privacy Links */}
       <footer className="max-w-5xl mx-auto px-4 pt-8 pb-6 text-center text-[11px] text-neutral-500 flex items-center justify-center gap-3">
         <span>emous — {BRAND.tagline}</span>
         <span>•</span>
@@ -3594,6 +3594,13 @@ export default function EmousHomeApp() {
           className="underline text-neutral-400 hover:text-emous-lime font-bold"
         >
           T&amp;C
+        </Link>
+        <span>•</span>
+        <Link
+          href="/privacy"
+          className="underline text-neutral-400 hover:text-emous-pink font-bold"
+        >
+          Privacy
         </Link>
       </footer>
     </div>

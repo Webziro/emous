@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
+    "moduleResolution": "node",
     "lib": ["DOM", "ESNext"],
     "jsx": "react-native",
     "allowSyntheticDefaultImports": true,

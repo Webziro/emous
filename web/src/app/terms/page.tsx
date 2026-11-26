@@ -143,13 +143,19 @@ export default function TermsAndConditionsPage() {
           </p>
         </section>
 
-        <div className="text-center pt-2">
+        <div className="flex items-center justify-center gap-3 pt-2">
           <Link
             href="/"
             className="inline-flex items-center gap-2 bg-emous-yellow text-black font-display font-extrabold text-xs uppercase px-5 py-2.5 rounded-2xl flyer-btn"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Return to emous App</span>
+          </Link>
+          <Link
+            href="/privacy"
+            className="inline-flex items-center gap-2 bg-emous-surface text-white font-display font-extrabold text-xs uppercase px-5 py-2.5 rounded-2xl border-2 border-black"
+          >
+            <span>Privacy Policy</span>
           </Link>
         </div>
       </main>

@@ -2,11 +2,18 @@
   "expo": {
     "name": "emous",
     "slug": "emous",
+    "scheme": "emous",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0D0D11",
     "primaryColor": "#FF1E8E",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0D11"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.emous.mobile",
@@ -17,9 +24,16 @@
     "android": {
       "package": "app.emous.mobile",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0D11"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     }
   }
