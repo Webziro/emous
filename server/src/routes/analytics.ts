@@ -9,6 +9,7 @@ import { HostSessionModel, RewardClaimModel } from '../models/Loyalty';
 import { PostModel } from '../models/Post';
 import { InboxMessageModel } from '../models/InboxMessage';
 import {
+  getAdminSecret,
   getWatDateAndHour,
   isValidAdminSecret,
   recordAnalyticsEvent,
@@ -74,6 +75,12 @@ analyticsRouter.post('/ping', async (req: Request, res: Response) => {
  */
 analyticsRouter.get('/summary', async (req: Request, res: Response) => {
   try {
+    if (!getAdminSecret()) {
+      return res.status(503).json({
+        error:
+          'ADMIN_SECRET environment variable is not set on the server yet. Add ADMIN_SECRET in Render Environment Variables.',
+      });
+    }
     if (!isValidAdminSecret(req)) {
       return res.status(401).json({ error: 'Unauthorized. Valid Admin Passcode required.' });
     }

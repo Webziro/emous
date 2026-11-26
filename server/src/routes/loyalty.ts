@@ -14,6 +14,7 @@ import {
 } from '../../../shared';
 import {
   creditHostSessionParticipant,
+  getAdminSecret,
   isValidAdminSecret,
   resolveGeoFromRequest,
 } from '../telemetry';
@@ -401,6 +402,12 @@ loyaltyRouter.post('/claim', async (req: Request, res: Response) => {
  */
 loyaltyRouter.get('/admin/claims', async (req: Request, res: Response) => {
   try {
+    if (!getAdminSecret()) {
+      return res.status(503).json({
+        error:
+          'ADMIN_SECRET environment variable is not set on the server yet. Add ADMIN_SECRET in Render Environment Variables.',
+      });
+    }
     if (!isValidAdminSecret(req)) {
       return res
         .status(401)
@@ -436,6 +443,12 @@ loyaltyRouter.get('/admin/claims', async (req: Request, res: Response) => {
  */
 loyaltyRouter.patch('/admin/claims/:id', async (req: Request, res: Response) => {
   try {
+    if (!getAdminSecret()) {
+      return res.status(503).json({
+        error:
+          'ADMIN_SECRET environment variable is not set on the server yet. Add ADMIN_SECRET in Render Environment Variables.',
+      });
+    }
     if (!isValidAdminSecret(req)) {
       return res
         .status(401)

@@ -7,16 +7,19 @@ import { LOYALTY_TARGET_DEVICES } from '../../shared';
 
 const geoCache = new Map<string, { country: string; region: string; city: string }>();
 
-export function getAdminSecret(): string {
-  return (process.env.ADMIN_SECRET || 'emous-admin-2026').trim();
+export function getAdminSecret(): string | null {
+  const secret = (process.env.ADMIN_SECRET || '').trim();
+  return secret.length > 0 ? secret : null;
 }
 
 export function isValidAdminSecret(req: Request): boolean {
+  const expected = getAdminSecret();
+  if (!expected) return false;
   const supplied =
     (req.headers['x-admin-secret'] as string) ||
     (req.query.secret as string) ||
     '';
-  return supplied.trim() === getAdminSecret();
+  return supplied.trim() === expected;
 }
 
 export function extractClientIp(req: Request): string {

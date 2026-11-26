@@ -170,9 +170,9 @@ export default function AdminFounderDashboard() {
               Analytics & Payout Verification
             </h1>
             <p className="text-xs text-neutral-400">
-              Enter your Admin Passcode (`ADMIN_SECRET`, default{' '}
-              <code className="text-emous-yellow">emous-admin-2026</code>) to
-              inspect daily unique traffic & verify ₦2,000 WhatsApp group claims.
+              Enter your private Founder Passcode configured in your server{' '}
+              <code className="text-emous-yellow">ADMIN_SECRET</code>{' '}
+              environment variable to inspect traffic & verify ₦2,000 claims.
             </p>
           </div>
 

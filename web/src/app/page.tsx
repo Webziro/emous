@@ -149,21 +149,49 @@ function getUnlockedAudioContext(): AudioContext | null {
   }
 }
 
+let hasStickyVibration = false;
+
+function triggerDeviceVibration(pattern: number | number[] = [240, 80, 260, 80, 300]): boolean {
+  if (typeof navigator === 'undefined') return false;
+  try {
+    if (typeof navigator.vibrate === 'function') {
+      const ok = navigator.vibrate(pattern);
+      if (ok) return true;
+      // Some Android OEM browsers only accept a single millisecond integer instead of pattern arrays
+      const totalMs = Array.isArray(pattern) ? pattern[0] || 300 : pattern;
+      return Boolean(navigator.vibrate(totalMs));
+    }
+  } catch {}
+  return false;
+}
+
 /**
  * Rings a bright, unmistakable multi-pulse bell chime + triggers mobile haptic vibration
- * when a new message or feed post arrives and sound is turned ON.
+ * (including OS Notification vibrate for Android background polling) when sound is ON.
  */
-function triggerBellRingAndVibrate(enabled = true) {
+function triggerBellRingAndVibrate(enabled = true, alertBody?: string) {
   if (!enabled || typeof window === 'undefined') return;
 
-  // 1. Trigger Native Device Vibration (Android & supported mobile browsers)
+  // 1. Trigger Direct Vibration (Android Chrome / Samsung / Opera / Firefox)
+  triggerDeviceVibration([220, 80, 240, 80, 300]);
+
+  // 2. If user allowed Web Notifications, trigger native OS notification + hardware vibrate
+  //    (bypasses background setInterval timer throttling on Android Chrome!)
   try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate([180, 90, 220, 90, 260]);
+    if (
+      alertBody &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
+      new Notification('emous 🔔', {
+        body: alertBody,
+        tag: 'emous-live-alert',
+        vibrate: [220, 80, 260],
+      } as NotificationOptions);
     }
   } catch {}
 
-  // 2. Play Rich Metallic Bell Ring via Web Audio API
+  // 3. Play Rich Metallic Bell Ring + Low-Frequency Thump via Web Audio API
   try {
     const ctx = getUnlockedAudioContext();
     if (!ctx) return;
@@ -195,10 +223,11 @@ function triggerBellRingAndVibrate(enabled = true) {
       osc2.stop(startTime + duration);
     };
 
-    // Double bell ring ("Ding-Dong-Ding!")
-    strikeBell(880.0, now, 0.22, 0.3);          // A5
-    strikeBell(1174.66, now + 0.14, 0.26, 0.32); // D6
-    strikeBell(1318.51, now + 0.30, 0.45, 0.35); // E6
+    // Double bell ring ("Ding-Dong-Ding!") + subtle sub-bass thump
+    strikeBell(110.0, now, 0.14, 0.22);
+    strikeBell(880.0, now, 0.22, 0.3);
+    strikeBell(1174.66, now + 0.14, 0.26, 0.32);
+    strikeBell(1318.51, now + 0.3, 0.45, 0.35);
   } catch {}
 }
 
@@ -725,7 +754,7 @@ export default function EmousHomeApp() {
 
   const fireBellAlert = useCallback(
     (toastMsg: string) => {
-      triggerBellRingAndVibrate(soundEnabled);
+      triggerBellRingAndVibrate(soundEnabled, toastMsg);
       setIsBellRinging(true);
       setTimeout(() => setIsBellRinging(false), 2000);
       setToast(toastMsg);
@@ -734,15 +763,23 @@ export default function EmousHomeApp() {
     [soundEnabled]
   );
 
-  // Unlock Web Audio Context on user's first tap/click anywhere on the page
+  // Unlock Web Audio Context + Sticky Vibration activation on user's first tap anywhere
   useEffect(() => {
     const unlock = () => {
       getUnlockedAudioContext();
+      if (!hasStickyVibration && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate(1);
+          hasStickyVibration = true;
+        } catch {}
+      }
     };
     window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
     window.addEventListener('keydown', unlock, { passive: true });
     return () => {
       window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
       window.removeEventListener('keydown', unlock);
     };
   }, []);
@@ -1562,6 +1599,7 @@ export default function EmousHomeApp() {
               <button
                 onClick={() => {
                   getUnlockedAudioContext();
+                  if (soundEnabled) triggerDeviceVibration(25);
                   setIsNotifOpen((prev) => !prev);
                 }}
                 className={`p-1.5 sm:p-2 rounded-xl flyer-btn relative inline-flex items-center justify-center ${
@@ -1659,7 +1697,14 @@ export default function EmousHomeApp() {
                     const nextState = !soundEnabled;
                     setSoundEnabled(nextState);
                     if (nextState) {
+                      triggerDeviceVibration([180, 60, 220]);
                       triggerBellRingAndVibrate(true);
+                      if (
+                        typeof Notification !== 'undefined' &&
+                        Notification.permission === 'default'
+                      ) {
+                        Notification.requestPermission().catch(() => {});
+                      }
                     }
                   }}
                   className="bg-black text-xs px-2.5 py-1 rounded-lg border border-white/20 inline-flex items-center gap-1 font-bold"
@@ -1678,7 +1723,16 @@ export default function EmousHomeApp() {
                   )}
                 </button>
                 <button
-                  onClick={() => fireBellAlert('🔔 Testing Bell Ring & Vibration!')}
+                  onClick={() => {
+                    triggerDeviceVibration([220, 80, 260, 80, 300]);
+                    if (
+                      typeof Notification !== 'undefined' &&
+                      Notification.permission === 'default'
+                    ) {
+                      Notification.requestPermission().catch(() => {});
+                    }
+                    fireBellAlert('🔔 Testing Bell Ring & Vibration!');
+                  }}
                   className="bg-emous-yellow text-black text-[10px] font-display font-extrabold px-2 py-1 rounded-lg border border-black uppercase"
                   title="Test Ring & Vibration"
                 >
@@ -1692,6 +1746,27 @@ export default function EmousHomeApp() {
                 </button>
               </div>
             </div>
+
+            {typeof window !== 'undefined' &&
+              typeof Notification !== 'undefined' &&
+              Notification.permission === 'default' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerDeviceVibration(80);
+                    Notification.requestPermission()
+                      .then((perm) => {
+                        if (perm === 'granted') {
+                          showToast('📳 OS Vibration & Push Notifications Enabled!');
+                        }
+                      })
+                      .catch(() => {});
+                  }}
+                  className="w-full bg-black text-emous-lime text-[11px] font-display font-extrabold py-2 px-3 rounded-xl border border-emous-lime/40 uppercase"
+                >
+                  📳 Tap to Enable Phone Vibrate Alerts (Android)
+                </button>
+              )}
 
             {notifications.length === 0 ? (
               <p className="text-xs text-neutral-400 py-3 text-center">
