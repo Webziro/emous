@@ -86,7 +86,7 @@ export default function AdminFounderDashboard() {
 
   const handleMarkClaim = async (
     claimId: string,
-    status: 'paid' | 'rejected'
+    status: 'pending' | 'paid' | 'rejected'
   ) => {
     if (!adminSecret) return;
     try {
@@ -99,7 +99,9 @@ export default function AdminFounderDashboard() {
       );
       showToast(
         status === 'paid'
-          ? '💸 Marked Claim as PAID (₦2,000) ✓'
+          ? '☑️ Ticked PAID (₦2,000) ✓'
+          : status === 'pending'
+          ? '↩️ Reverted claim to Pending'
           : '❌ Claim marked Rejected'
       );
       loadAll(adminSecret);
@@ -570,40 +572,69 @@ export default function AdminFounderDashboard() {
                         </p>
                       </div>
 
-                      {claim.status === 'pending' && (
-                        <div className="space-y-2 pt-1">
-                          <input
-                            type="text"
-                            value={payRefs[claim._id] || ''}
-                            onChange={(e) =>
-                              setPayRefs((prev) => ({
-                                ...prev,
-                                [claim._id]: e.target.value,
-                              }))
-                            }
-                            placeholder="Optional OPay/Bank Ref (e.g. OPY-94821)"
-                            className="w-full bg-black text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/25"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleMarkClaim(claim._id, 'paid')}
-                              className="flex-1 bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1"
-                            >
-                              <Check className="w-4 h-4" />
-                              <span>Mark Paid (₦2,000)</span>
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleMarkClaim(claim._id, 'rejected')
+                      <div className="space-y-2 pt-1">
+                        {/* Interactive Paid Tick Checkbox for Admin */}
+                        <label className="flex items-center justify-between gap-2 bg-black/80 px-3.5 py-2.5 rounded-xl border-2 border-black cursor-pointer hover:border-emous-lime">
+                          <span className="font-display font-extrabold text-xs uppercase text-white inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={claim.status === 'paid'}
+                              onChange={(e) =>
+                                handleMarkClaim(
+                                  claim._id,
+                                  e.target.checked ? 'paid' : 'pending'
+                                )
                               }
-                              className="bg-black text-red-400 font-display font-extrabold text-xs px-3 py-2.5 rounded-xl border-2 border-black uppercase inline-flex items-center gap-1"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>Reject</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                              className="w-4 h-4 accent-[#CCFF00] rounded cursor-pointer"
+                            />
+                            <span>
+                              {claim.status === 'paid'
+                                ? '☑️ Payment Done (Ticked Paid ₦2,000)'
+                                : '☐ Tick Paid Once Transfer Is Done'}
+                            </span>
+                          </span>
+                          {claim.paidAt && (
+                            <span className="text-[10px] font-bold text-emous-lime">
+                              {new Date(claim.paidAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </label>
+
+                        {claim.status === 'pending' && (
+                          <>
+                            <input
+                              type="text"
+                              value={payRefs[claim._id] || ''}
+                              onChange={(e) =>
+                                setPayRefs((prev) => ({
+                                  ...prev,
+                                  [claim._id]: e.target.value,
+                                }))
+                              }
+                              placeholder="Optional OPay/Bank Ref (e.g. OPY-94821)"
+                              className="w-full bg-black text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/25"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleMarkClaim(claim._id, 'paid')}
+                                className="flex-1 bg-emous-lime text-black font-display font-extrabold text-xs py-2.5 rounded-xl flyer-btn uppercase inline-flex items-center justify-center gap-1"
+                              >
+                                <Check className="w-4 h-4" />
+                                <span>Tick Paid (₦2,000)</span>
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleMarkClaim(claim._id, 'rejected')
+                                }
+                                className="bg-black text-red-400 font-display font-extrabold text-xs px-3 py-2.5 rounded-xl border-2 border-black uppercase inline-flex items-center gap-1"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                <span>Reject</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
 
                       {claim.paymentReference && (
                         <p className="text-[11px] font-bold text-emous-lime">

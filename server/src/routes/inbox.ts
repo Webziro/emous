@@ -10,7 +10,11 @@ import {
   saveLocalStore,
 } from '../db';
 import { createRateLimiter, inspectAndSanitizeText } from '../safety';
-import { recordAnalyticsEvent } from '../telemetry';
+import {
+  creditHostSessionForQualifiedMessage,
+  recordAnalyticsEvent,
+  resolveGeoFromRequest,
+} from '../telemetry';
 import { BRAND, STORY_COLOR_PAIRS } from '../../../shared';
 
 export const inboxRouter = Router();
@@ -243,7 +247,9 @@ inboxRouter.post(
         isHidden: false,
       });
 
+      let rewardCredit: any = { credited: false };
       if (senderDeviceId) {
+        const geo = await resolveGeoFromRequest(req);
         recordAnalyticsEvent({
           req,
           deviceId: senderDeviceId,
@@ -253,11 +259,31 @@ inboxRouter.post(
           sessionCode: (req.body?.sessionCode as string) || undefined,
           source: (req.body?.source as string) || 'direct',
         }).catch(() => {});
+
+        rewardCredit = await creditHostSessionForQualifiedMessage({
+          req,
+          sessionCode: (req.body?.sessionCode as string) || undefined,
+          hostHandle: canonicalHandle,
+          playerDeviceId: senderDeviceId,
+          messageText: question,
+          hardwareSig: (req.body?.hardwareSig as string) || undefined,
+          lat:
+            typeof req.body?.lat === 'number'
+              ? req.body.lat
+              : Number(req.body?.lat) || undefined,
+          lng:
+            typeof req.body?.lng === 'number'
+              ? req.body.lng
+              : Number(req.body?.lng) || undefined,
+          ipHash: geo.ipHash,
+          city: geo.city,
+        }).catch(() => ({ credited: false }));
       }
 
       return res.status(201).json({
         success: true,
         message: `Secret message safely delivered to @${canonicalHandle}! 🚀`,
+        rewardCredit,
         item: formatInboxMessage(created),
       });
     }
@@ -289,7 +315,9 @@ inboxRouter.post(
     localStore.inbox.unshift(created);
     saveLocalStore();
 
+    let rewardCredit: any = { credited: false };
     if (senderDeviceId) {
+      const geo = await resolveGeoFromRequest(req);
       recordAnalyticsEvent({
         req,
         deviceId: senderDeviceId,
@@ -299,11 +327,31 @@ inboxRouter.post(
         sessionCode: (req.body?.sessionCode as string) || undefined,
         source: (req.body?.source as string) || 'direct',
       }).catch(() => {});
+
+      rewardCredit = await creditHostSessionForQualifiedMessage({
+        req,
+        sessionCode: (req.body?.sessionCode as string) || undefined,
+        hostHandle: canonicalHandle,
+        playerDeviceId: senderDeviceId,
+        messageText: question,
+        hardwareSig: (req.body?.hardwareSig as string) || undefined,
+        lat:
+          typeof req.body?.lat === 'number'
+            ? req.body.lat
+            : Number(req.body?.lat) || undefined,
+        lng:
+          typeof req.body?.lng === 'number'
+            ? req.body.lng
+            : Number(req.body?.lng) || undefined,
+        ipHash: geo.ipHash,
+        city: geo.city,
+      }).catch(() => ({ credited: false }));
     }
 
     return res.status(201).json({
       success: true,
       message: `Secret message safely delivered to @${canonicalHandle}! 🚀`,
+      rewardCredit,
       item: formatInboxMessage(created),
     });
   } catch (err) {

@@ -11,11 +11,14 @@ import {
   BRAND,
   LOYALTY_REWARD_NAIRA,
   LOYALTY_TARGET_DEVICES,
+  LOYALTY_WINDOW_HOURS,
+  LOYALTY_WINDOW_MS,
 } from '../../../shared';
 import {
-  creditHostSessionParticipant,
+  creditHostSessionForQualifiedMessage,
   getAdminSecret,
   isValidAdminSecret,
+  resetExpiredActiveSessionIfNeeded,
   resolveGeoFromRequest,
 } from '../telemetry';
 
@@ -31,7 +34,7 @@ function generateSessionCode(handle: string): string {
   return `${prefix}-${suffix}`;
 }
 
-function formatSessionDTO(doc: any, claimDoc?: any) {
+function formatSessionDTO(doc: any, claimDoc?: any, didAutoReset = false) {
   const domain = process.env.PUBLIC_DOMAIN || BRAND.domain;
   return {
     _id: String(doc._id),
@@ -43,10 +46,14 @@ function formatSessionDTO(doc: any, claimDoc?: any) {
       : 0,
     targetDevices: doc.targetDevices || LOYALTY_TARGET_DEVICES,
     rewardNaira: doc.rewardNaira || LOYALTY_REWARD_NAIRA,
+    windowHours: LOYALTY_WINDOW_HOURS,
+    didAutoReset,
+    adminWhatsapp: process.env.ADMIN_WHATSAPP || BRAND.adminWhatsappNumber || '',
     status: doc.status || 'active',
     shareUrl: `https://${domain}/${doc.hostHandle}?g=${doc.sessionCode}`,
     claimStatus: claimDoc ? claimDoc.status : 'none',
     claimReference: claimDoc?.paymentReference || undefined,
+    windowStartedAt: doc.windowStartedAt || doc.createdAt,
     createdAt: doc.createdAt,
     expiresAt: doc.expiresAt,
   };
@@ -99,17 +106,17 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS);
 
     if (isUsingMongo()) {
       let session = !forceNew
         ? await HostSessionModel.findOne({
             hostDeviceId: deviceId,
-            expiresAt: { $gt: now },
             status: { $in: ['active', 'qualified', 'claimed'] },
           }).sort({ createdAt: -1 })
         : null;
 
+      let didAutoReset = false;
       if (!session) {
         session = await HostSessionModel.create({
           sessionCode: generateSessionCode(handle),
@@ -119,23 +126,32 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
           groupName: groupName || 'WhatsApp Group Game',
           uniqueDevices: [],
           uniqueIpHashes: [],
+          uniqueHardwareKeys: [],
+          uniqueLocationKeys: [],
+          qualifiedMessageHashes: [],
           cities: [],
           eventTimestamps: [],
           targetDevices: LOYALTY_TARGET_DEVICES,
           rewardNaira: LOYALTY_REWARD_NAIRA,
           status: 'active',
+          windowStartedAt: now,
           expiresAt,
         });
-      } else if (groupName && session.groupName !== groupName) {
-        session.groupName = groupName;
-        await session.save();
+      } else {
+        didAutoReset = resetExpiredActiveSessionIfNeeded(session);
+        if (groupName && session.groupName !== groupName) {
+          session.groupName = groupName;
+        }
+        if (didAutoReset || (groupName && session.isModified('groupName'))) {
+          await session.save();
+        }
       }
 
       const claim = await RewardClaimModel.findOne({
         sessionCode: session.sessionCode,
       }).lean();
 
-      return res.json({ session: formatSessionDTO(session, claim) });
+      return res.json({ session: formatSessionDTO(session, claim, didAutoReset) });
     }
 
     // Local store engine
@@ -144,11 +160,11 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
       ? localStore.hostSessions.find(
           (s) =>
             s.hostDeviceId === deviceId &&
-            new Date(s.expiresAt).getTime() > now.getTime() &&
             ['active', 'qualified', 'claimed'].includes(s.status)
         )
       : undefined;
 
+    let didAutoReset = false;
     if (!session) {
       const nowIso = now.toISOString();
       session = {
@@ -160,27 +176,34 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
         groupName: groupName || 'WhatsApp Group Game',
         uniqueDevices: [],
         uniqueIpHashes: [],
+        uniqueHardwareKeys: [],
+        uniqueLocationKeys: [],
+        qualifiedMessageHashes: [],
         cities: [],
         eventTimestamps: [],
         targetDevices: LOYALTY_TARGET_DEVICES,
         rewardNaira: LOYALTY_REWARD_NAIRA,
         status: 'active',
+        windowStartedAt: nowIso,
         expiresAt: expiresAt.toISOString(),
         createdAt: nowIso,
         updatedAt: nowIso,
       };
       localStore.hostSessions.unshift(session);
       saveLocalStore();
-    } else if (groupName && session.groupName !== groupName) {
-      session.groupName = groupName;
-      session.updatedAt = now.toISOString();
-      saveLocalStore();
+    } else {
+      didAutoReset = resetExpiredActiveSessionIfNeeded(session);
+      if (groupName && session.groupName !== groupName) {
+        session.groupName = groupName;
+        session.updatedAt = now.toISOString();
+      }
+      if (didAutoReset || groupName) saveLocalStore();
     }
 
     const claim = localStore.rewardClaims.find(
       (c) => c.sessionCode === session!.sessionCode
     );
-    return res.json({ session: formatSessionDTO(session, claim) });
+    return res.json({ session: formatSessionDTO(session, claim, didAutoReset) });
   } catch (err) {
     console.error('Error in POST /loyalty/session:', err);
     return res.status(500).json({ error: 'Failed to create/load host session.' });
@@ -189,7 +212,7 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/loyalty/track
- * Explicitly credits a unique player participating via a host's session link (?g=CODE).
+ * Requires a valid complete unique sentence message; ignores bare page views.
  */
 loyaltyRouter.post('/track', async (req: Request, res: Response) => {
   try {
@@ -199,24 +222,33 @@ loyaltyRouter.post('/track', async (req: Request, res: Response) => {
         '').trim();
     const sessionCode = ((req.body?.sessionCode as string) || '').trim();
     const hostHandle = ((req.body?.handle as string) || '').trim();
+    const messageText = ((req.body?.messageText as string) || '').trim();
 
-    if (!playerDeviceId || (!sessionCode && !hostHandle)) {
+    if (!playerDeviceId || !messageText || (!sessionCode && !hostHandle)) {
       return res.json({ credited: false });
     }
 
     const geo = await resolveGeoFromRequest(req);
-    const updated = await creditHostSessionParticipant({
+    const result = await creditHostSessionForQualifiedMessage({
+      req,
       sessionCode: sessionCode || undefined,
       hostHandle: hostHandle || undefined,
       playerDeviceId,
+      messageText,
+      hardwareSig: (req.body?.hardwareSig as string) || undefined,
+      lat:
+        typeof req.body?.lat === 'number'
+          ? req.body.lat
+          : Number(req.body?.lat) || undefined,
+      lng:
+        typeof req.body?.lng === 'number'
+          ? req.body.lng
+          : Number(req.body?.lng) || undefined,
       ipHash: geo.ipHash,
       city: geo.city,
     });
 
-    return res.json({
-      credited: Boolean(updated),
-      uniqueDeviceCount: updated?.uniqueDevices?.length || 0,
-    });
+    return res.json(result);
   } catch (err) {
     console.error('Error in POST /loyalty/track:', err);
     return res.status(500).json({ error: 'Failed to track session participant.' });
@@ -456,9 +488,16 @@ loyaltyRouter.patch('/admin/claims/:id', async (req: Request, res: Response) => 
     }
 
     const { id } = req.params;
-    const status = req.body?.status === 'rejected' ? 'rejected' : 'paid';
+    const rawStatus = req.body?.status;
+    const status: 'pending' | 'paid' | 'rejected' =
+      rawStatus === 'rejected'
+        ? 'rejected'
+        : rawStatus === 'pending'
+        ? 'pending'
+        : 'paid';
     const paymentReference = ((req.body?.paymentReference as string) || '').trim();
     const adminNote = ((req.body?.adminNote as string) || '').trim();
+    const sessionStatus = status === 'pending' ? 'claimed' : status;
 
     if (isUsingMongo()) {
       const claim = await RewardClaimModel.findByIdAndUpdate(
@@ -476,7 +515,7 @@ loyaltyRouter.patch('/admin/claims/:id', async (req: Request, res: Response) => 
       }
       await HostSessionModel.findOneAndUpdate(
         { sessionCode: claim.sessionCode },
-        { status }
+        { status: sessionStatus }
       );
       return res.json({ claim });
     }
@@ -497,7 +536,7 @@ loyaltyRouter.patch('/admin/claims/:id', async (req: Request, res: Response) => 
       (s) => s.sessionCode === claim.sessionCode
     );
     if (session) {
-      session.status = status;
+      session.status = sessionStatus;
       session.updatedAt = nowIso;
     }
     saveLocalStore();

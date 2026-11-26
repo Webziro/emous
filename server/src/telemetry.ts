@@ -3,7 +3,11 @@ import { Request } from 'express';
 import { createId, isUsingMongo, localStore, saveLocalStore } from './db';
 import { AnalyticsEventModel, AnalyticsEventType } from './models/AnalyticsEvent';
 import { HostSessionModel } from './models/Loyalty';
-import { LOYALTY_TARGET_DEVICES } from '../../shared';
+import {
+  evaluateCompleteUniqueSentence,
+  LOYALTY_TARGET_DEVICES,
+  LOYALTY_WINDOW_MS,
+} from '../../shared';
 
 const geoCache = new Map<string, { country: string; region: string; city: string }>();
 
@@ -155,27 +159,110 @@ export async function resolveGeoFromRequest(req: Request): Promise<{
   };
 }
 
+export function buildIpSubnetPrefix(ip: string): string {
+  const clean = ip.replace(/^::ffff:/, '');
+  if (clean.includes('.')) {
+    const parts = clean.split('.');
+    return parts.slice(0, 3).join('.');
+  }
+  return clean.split(':').slice(0, 4).join(':');
+}
+
+export function resetExpiredActiveSessionIfNeeded(session: any): boolean {
+  if (!session || session.status !== 'active') return false;
+  const now = new Date();
+  const expiresMs = new Date(session.expiresAt).getTime();
+  if (Number.isFinite(expiresMs) && now.getTime() <= expiresMs) {
+    return false;
+  }
+
+  // Strictly reset progress back to zero after the 2-hour interval expires incomplete
+  session.uniqueDevices = [];
+  session.uniqueIpHashes = [];
+  session.uniqueHardwareKeys = [];
+  session.uniqueLocationKeys = [];
+  session.qualifiedMessageHashes = [];
+  session.cities = [];
+  session.eventTimestamps = [];
+  if (isUsingMongo()) {
+    session.windowStartedAt = now;
+    session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS);
+  } else {
+    session.windowStartedAt = now.toISOString();
+    session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS).toISOString();
+    session.updatedAt = now.toISOString();
+  }
+  return true;
+}
+
 /**
- * Credits a unique player deviceId & ipHash to an active 24h Host Game Session
- * when a WhatsApp group member visits the host's link (?g=SESSION_CODE or @handle).
+ * Credits a qualified message toward a Host Game Session ONLY when ALL strict rules pass:
+ * 1. Sent within the active 2-hour window (auto-resets to 0 if 2 hours elapsed without hitting 30).
+ * 2. Message contains at least one complete sentence (>= 4 words, >= 18 chars) & is unique (not duplicated).
+ * 3. Distinct physical device (hardware signature + subnet hash catches Chrome/Safari/Firefox on same phone!).
+ * 4. Distinct location (same IP or same GPS coordinate box counts strictly as ONE!).
  */
-export async function creditHostSessionParticipant(params: {
+export async function creditHostSessionForQualifiedMessage(params: {
+  req: Request;
   sessionCode?: string;
   hostHandle?: string;
   playerDeviceId: string;
-  ipHash: string;
-  city: string;
-}) {
-  const { sessionCode, hostHandle, playerDeviceId, ipHash, city } = params;
-  if (!playerDeviceId || (!sessionCode && !hostHandle)) return null;
+  messageText: string;
+  hardwareSig?: string;
+  lat?: number;
+  lng?: number;
+  ipHash?: string;
+  city?: string;
+}): Promise<{
+  credited: boolean;
+  reason?: string;
+  didAutoReset?: boolean;
+  uniqueDeviceCount?: number;
+}> {
+  const {
+    req,
+    sessionCode,
+    hostHandle,
+    playerDeviceId,
+    messageText,
+    hardwareSig,
+    lat,
+    lng,
+  } = params;
+  if (!playerDeviceId || (!sessionCode && !hostHandle)) {
+    return { credited: false, reason: 'No active game session' };
+  }
 
   const cleanCode = sessionCode?.trim().toUpperCase();
   const cleanHandleLower = hostHandle?.trim().replace(/^@/, '').toLowerCase();
   const now = new Date();
+  const rawIp = extractClientIp(req);
+  const ipHash = params.ipHash || hashIp(rawIp);
+  const subnetHash = hashIp(buildIpSubnetPrefix(rawIp));
+  const city = params.city || 'Unknown';
+
+  // Build hardware key so multiple browsers on the same device share the same key
+  const cleanHw = (hardwareSig || '').trim().toLowerCase().slice(0, 140);
+  const hardwareKey = cleanHw
+    ? createHash('sha256')
+        .update(`${cleanHw}|${subnetHash}`)
+        .digest('hex')
+        .slice(0, 20)
+    : `dev:${playerDeviceId}`;
+
+  // Build location key: exact GPS cell (~100m) if provided, plus strict IP hash fallback
+  const hasGps =
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) > 0.001;
+  const locationKey = hasGps
+    ? `gps:${lat!.toFixed(3)},${lng!.toFixed(3)}`
+    : `ip:${ipHash}`;
 
   if (isUsingMongo()) {
     const query: any = {
-      expiresAt: { $gt: now },
       status: { $in: ['active', 'qualified', 'claimed'] },
     };
     if (cleanCode) {
@@ -183,82 +270,194 @@ export async function creditHostSessionParticipant(params: {
     } else if (cleanHandleLower) {
       query.hostHandleLower = cleanHandleLower;
     } else {
-      return null;
+      return { credited: false };
     }
 
     const session = await HostSessionModel.findOne(query).sort({ createdAt: -1 });
-    if (!session) return null;
+    if (!session) return { credited: false };
 
-    // Never count the group admin's own device toward their 30 unique players
+    const didAutoReset = resetExpiredActiveSessionIfNeeded(session);
+
+    // Host cannot count their own messages
     if (session.hostDeviceId === playerDeviceId) {
-      return session;
+      if (didAutoReset) await session.save();
+      return {
+        credited: false,
+        didAutoReset,
+        reason: 'Host self-message ignored',
+        uniqueDeviceCount: session.uniqueDevices.length,
+      };
     }
 
-    let changed = false;
-    if (!session.uniqueDevices.includes(playerDeviceId)) {
-      session.uniqueDevices.push(playerDeviceId);
-      session.eventTimestamps.push(now);
-      changed = true;
+    // Already reached 30
+    if (session.status !== 'active') {
+      return {
+        credited: false,
+        didAutoReset,
+        uniqueDeviceCount: session.uniqueDevices.length,
+      };
     }
-    if (ipHash && ipHash !== 'unknown' && !session.uniqueIpHashes.includes(ipHash)) {
-      session.uniqueIpHashes.push(ipHash);
-      changed = true;
+
+    // Rule: Message must be unique & at least one complete sentence
+    const sentenceEval = evaluateCompleteUniqueSentence(
+      messageText,
+      session.qualifiedMessageHashes || []
+    );
+    if (!sentenceEval.qualified) {
+      if (didAutoReset) await session.save();
+      return {
+        credited: false,
+        didAutoReset,
+        reason: sentenceEval.reason,
+        uniqueDeviceCount: session.uniqueDevices.length,
+      };
     }
+
+    // Rule: Different physical device (not different browser on same phone)
+    if (
+      session.uniqueDevices.includes(playerDeviceId) ||
+      (session.uniqueHardwareKeys || []).includes(hardwareKey)
+    ) {
+      if (didAutoReset) await session.save();
+      return {
+        credited: false,
+        didAutoReset,
+        reason: 'Same device or another browser on the same device counts as one.',
+        uniqueDeviceCount: session.uniqueDevices.length,
+      };
+    }
+
+    // Rule: Same location / IP counts strictly as ONE
+    if (
+      session.uniqueIpHashes.includes(ipHash) ||
+      (session.uniqueLocationKeys || []).includes(locationKey)
+    ) {
+      if (didAutoReset) await session.save();
+      return {
+        credited: false,
+        didAutoReset,
+        reason: 'Devices from the same location count as one.',
+        uniqueDeviceCount: session.uniqueDevices.length,
+      };
+    }
+
+    // Passes all rules! Start timer window on very first qualified message if empty
+    if (session.uniqueDevices.length === 0) {
+      session.windowStartedAt = now;
+      session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS);
+    }
+
+    session.uniqueDevices.push(playerDeviceId);
+    session.uniqueIpHashes.push(ipHash);
+    session.uniqueHardwareKeys = session.uniqueHardwareKeys || [];
+    session.uniqueHardwareKeys.push(hardwareKey);
+    session.uniqueLocationKeys = session.uniqueLocationKeys || [];
+    session.uniqueLocationKeys.push(locationKey);
+    session.qualifiedMessageHashes = session.qualifiedMessageHashes || [];
+    session.qualifiedMessageHashes.push(sentenceEval.normalized);
+    session.eventTimestamps.push(now);
     if (city && city !== 'Unknown' && city !== 'Localhost' && !session.cities.includes(city)) {
       session.cities.push(city);
-      changed = true;
     }
-    if (
-      session.uniqueDevices.length >= (session.targetDevices || LOYALTY_TARGET_DEVICES) &&
-      session.status === 'active'
-    ) {
+    if (session.uniqueDevices.length >= (session.targetDevices || LOYALTY_TARGET_DEVICES)) {
       session.status = 'qualified';
-      changed = true;
     }
-    if (changed) {
-      await session.save();
-    }
-    return session;
+    await session.save();
+    return {
+      credited: true,
+      didAutoReset,
+      uniqueDeviceCount: session.uniqueDevices.length,
+    };
   }
 
-  // Local store fallback
+  // Local store engine fallback
   const session = localStore.hostSessions.find((s) => {
-    const validTime = new Date(s.expiresAt).getTime() > now.getTime();
-    const validStatus = ['active', 'qualified', 'claimed'].includes(s.status);
-    if (!validTime || !validStatus) return false;
+    if (!['active', 'qualified', 'claimed'].includes(s.status)) return false;
     if (cleanCode) return s.sessionCode === cleanCode;
     if (cleanHandleLower) return s.hostHandleLower === cleanHandleLower;
     return false;
   });
 
-  if (!session || session.hostDeviceId === playerDeviceId) return session || null;
+  if (!session) return { credited: false };
+  const didAutoReset = resetExpiredActiveSessionIfNeeded(session);
 
-  let changed = false;
-  if (!session.uniqueDevices.includes(playerDeviceId)) {
-    session.uniqueDevices.push(playerDeviceId);
-    session.eventTimestamps.push(now.toISOString());
-    changed = true;
+  if (session.hostDeviceId === playerDeviceId || session.status !== 'active') {
+    if (didAutoReset) saveLocalStore();
+    return {
+      credited: false,
+      didAutoReset,
+      uniqueDeviceCount: session.uniqueDevices.length,
+    };
   }
-  if (ipHash && ipHash !== 'unknown' && !session.uniqueIpHashes.includes(ipHash)) {
-    session.uniqueIpHashes.push(ipHash);
-    changed = true;
+
+  const sentenceEval = evaluateCompleteUniqueSentence(
+    messageText,
+    session.qualifiedMessageHashes || []
+  );
+  if (!sentenceEval.qualified) {
+    if (didAutoReset) saveLocalStore();
+    return {
+      credited: false,
+      didAutoReset,
+      reason: sentenceEval.reason,
+      uniqueDeviceCount: session.uniqueDevices.length,
+    };
   }
+
+  if (
+    session.uniqueDevices.includes(playerDeviceId) ||
+    (session.uniqueHardwareKeys || []).includes(hardwareKey)
+  ) {
+    if (didAutoReset) saveLocalStore();
+    return {
+      credited: false,
+      didAutoReset,
+      reason: 'Same device or different browser on same device counts as one.',
+      uniqueDeviceCount: session.uniqueDevices.length,
+    };
+  }
+
+  if (
+    session.uniqueIpHashes.includes(ipHash) ||
+    (session.uniqueLocationKeys || []).includes(locationKey)
+  ) {
+    if (didAutoReset) saveLocalStore();
+    return {
+      credited: false,
+      didAutoReset,
+      reason: 'Devices from the same location count as one.',
+      uniqueDeviceCount: session.uniqueDevices.length,
+    };
+  }
+
+  if (session.uniqueDevices.length === 0) {
+    session.windowStartedAt = now.toISOString();
+    session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS).toISOString();
+  }
+
+  session.uniqueDevices.push(playerDeviceId);
+  session.uniqueIpHashes.push(ipHash);
+  session.uniqueHardwareKeys = [...(session.uniqueHardwareKeys || []), hardwareKey];
+  session.uniqueLocationKeys = [...(session.uniqueLocationKeys || []), locationKey];
+  session.qualifiedMessageHashes = [
+    ...(session.qualifiedMessageHashes || []),
+    sentenceEval.normalized,
+  ];
+  session.eventTimestamps.push(now.toISOString());
   if (city && city !== 'Unknown' && city !== 'Localhost' && !session.cities.includes(city)) {
     session.cities.push(city);
-    changed = true;
   }
-  if (
-    session.uniqueDevices.length >= (session.targetDevices || LOYALTY_TARGET_DEVICES) &&
-    session.status === 'active'
-  ) {
+  if (session.uniqueDevices.length >= (session.targetDevices || LOYALTY_TARGET_DEVICES)) {
     session.status = 'qualified';
-    changed = true;
   }
-  if (changed) {
-    session.updatedAt = now.toISOString();
-    saveLocalStore();
-  }
-  return session;
+  session.updatedAt = now.toISOString();
+  saveLocalStore();
+
+  return {
+    credited: true,
+    didAutoReset,
+    uniqueDeviceCount: session.uniqueDevices.length,
+  };
 }
 
 export async function recordAnalyticsEvent(params: {
@@ -310,17 +509,6 @@ export async function recordAnalyticsEvent(params: {
       localStore.analytics = localStore.analytics.slice(-5000);
     }
     saveLocalStore();
-  }
-
-  // Automatically credit active host session if player came from ?g=CODE or @handle
-  if (params.sessionCode || params.handle) {
-    await creditHostSessionParticipant({
-      sessionCode: params.sessionCode,
-      hostHandle: params.handle,
-      playerDeviceId: params.deviceId,
-      ipHash: geo.ipHash,
-      city: geo.city,
-    });
   }
 
   return geo;

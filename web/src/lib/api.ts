@@ -810,6 +810,36 @@ export async function fetchInbox(handle: string): Promise<{
   };
 }
 
+/**
+ * Computes a browser-independent physical device hardware signature (GPU, screen, cores, OS platform)
+ * so switching browsers (Chrome -> Safari -> Firefox) on the same phone/computer maps to the same device.
+ */
+export function getHardwareSignature(): string {
+  if (typeof window === 'undefined') return 'ssr-hw';
+  try {
+    const nav: any = window.navigator;
+    const screenSig = `${window.screen?.width || 0}x${window.screen?.height || 0}x${
+      window.screen?.colorDepth || 24
+    }`;
+    const cores = nav?.hardwareConcurrency || 0;
+    const platform = nav?.platform || 'unknown';
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    let gpu = '';
+    try {
+      const canvas = document.createElement('canvas');
+      const gl: any =
+        canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '' : '';
+      }
+    } catch {}
+    return `${platform}|${screenSig}|c${cores}|${tz}|${String(gpu).slice(0, 48)}`;
+  } catch {
+    return 'unknown-hw';
+  }
+}
+
 export async function sendAnonymousInboxMessage(
   recipientHandle: string,
   question: string,
@@ -819,9 +849,11 @@ export async function sendAnonymousInboxMessage(
 ): Promise<{
   success: boolean;
   message: string;
+  rewardCredit?: { credited: boolean; reason?: string };
   item: InboxMessageDTO;
 }> {
   const deviceId = getOrCreateDeviceId();
+  const hardwareSig = getHardwareSignature();
   try {
     const res = await fetch(
       `${API_BASE}/inbox/${encodeURIComponent(recipientHandle)}`,
@@ -836,6 +868,7 @@ export async function sendAnonymousInboxMessage(
           themeId,
           burnAfterReading: Boolean(burnAfterReading),
           deviceId,
+          hardwareSig,
           sessionCode,
           source:
             typeof document !== 'undefined' &&
@@ -1088,7 +1121,7 @@ export async function updateAdminClaimStatus(
   adminSecret: string,
   claimId: string,
   payload: {
-    status: 'paid' | 'rejected';
+    status: 'pending' | 'paid' | 'rejected';
     paymentReference?: string;
     adminNote?: string;
   }

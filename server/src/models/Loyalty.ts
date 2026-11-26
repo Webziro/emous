@@ -9,11 +9,15 @@ export interface IHostSession extends Document {
   groupName: string;
   uniqueDevices: string[];
   uniqueIpHashes: string[];
+  uniqueHardwareKeys: string[];
+  uniqueLocationKeys: string[];
+  qualifiedMessageHashes: string[];
   cities: string[];
   eventTimestamps: Date[];
   targetDevices: number;
   rewardNaira: number;
   status: 'active' | 'qualified' | 'claimed' | 'paid' | 'rejected';
+  windowStartedAt: Date;
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -60,6 +64,18 @@ const HostSessionSchema = new Schema<IHostSession>(
       type: [String],
       default: [],
     },
+    uniqueHardwareKeys: {
+      type: [String],
+      default: [],
+    },
+    uniqueLocationKeys: {
+      type: [String],
+      default: [],
+    },
+    qualifiedMessageHashes: {
+      type: [String],
+      default: [],
+    },
     cities: {
       type: [String],
       default: [],
@@ -81,6 +97,10 @@ const HostSessionSchema = new Schema<IHostSession>(
       enum: ['active', 'qualified', 'claimed', 'paid', 'rejected'],
       default: 'active',
       index: true,
+    },
+    windowStartedAt: {
+      type: Date,
+      default: Date.now,
     },
     expiresAt: {
       type: Date,

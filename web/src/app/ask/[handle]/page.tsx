@@ -285,17 +285,27 @@ export default function AskReceiverPage() {
           </form>
         )}
 
-        {/* Secondary link to explore live Global/Local Feed */}
-        <div className="mt-6 text-center">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-neutral-300 hover:text-emous-lime underline underline-offset-4"
-          >
-            <Flame className="w-4 h-4 text-emous-pink" />
-            <span>
-              Or browse live anonymous confessions happening right now →
-            </span>
-          </Link>
+        {/* Secondary link to explore live Global/Local Feed + Tiny T&C */}
+        <div className="mt-6 text-center space-y-2">
+          <div>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-neutral-300 hover:text-emous-lime underline underline-offset-4"
+            >
+              <Flame className="w-4 h-4 text-emous-pink" />
+              <span>
+                Or browse live anonymous confessions happening right now →
+              </span>
+            </Link>
+          </div>
+          <div>
+            <Link
+              href="/terms"
+              className="text-[11px] underline text-neutral-400 hover:text-emous-yellow font-bold"
+            >
+              T&amp;C
+            </Link>
+          </div>
         </div>
       </main>
     </div>

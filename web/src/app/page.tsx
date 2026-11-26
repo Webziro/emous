@@ -29,6 +29,7 @@ import {
   Eye,
   Gift,
   Wallet,
+  Phone,
 } from 'lucide-react';
 import {
   ALL_BACKGROUNDS,
@@ -846,13 +847,42 @@ export default function EmousHomeApp() {
           forceNew,
         });
         setHostSession(s);
+        if (s.didAutoReset) {
+          showToast(
+            '⏱️ 2-hour window ended before 30/30 — counter reset back to 0!'
+          );
+        }
       } catch {
       } finally {
         setIsLoadingSession(false);
       }
     },
-    [identity?.handle, demoGoldenWizardMode, groupNameInput]
+    [identity?.handle, demoGoldenWizardMode, groupNameInput, showToast]
   );
+
+  // Live 1-second 2-hour interval countdown timer for active WhatsApp Admin session
+  const [sessionCountdown, setSessionCountdown] = useState<string>('2h 00m 00s');
+  useEffect(() => {
+    if (!hostSession || hostSession.status !== 'active') return;
+    const tick = () => {
+      const ms = new Date(hostSession.expiresAt).getTime() - Date.now();
+      if (ms <= 0) {
+        setSessionCountdown('0h 00m 00s (Resetting...)');
+        loadHostSession(false);
+        return;
+      }
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      setSessionCountdown(
+        `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+      );
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [hostSession, loadHostSession]);
 
   useEffect(() => {
     if (activeScreen === 'inbox' && identity?.handle && !demoGoldenWizardMode) {
@@ -2387,11 +2417,17 @@ export default function EmousHomeApp() {
           {!demoGoldenWizardMode && (
             <div className="bg-emous-surface rounded-2xl sm:rounded-3xl p-4 sm:p-5 flyer-card border-2 border-black space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-2.5 py-1 rounded-full border-2 border-black uppercase inline-flex items-center gap-1">
                     <Gift className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>WhatsApp Admin Reward: ₦2,000</span>
                   </span>
+                  <Link
+                    href="/terms"
+                    className="text-[10px] font-display font-extrabold underline text-neutral-300 hover:text-emous-lime px-1.5 py-0.5"
+                  >
+                    T&amp;C
+                  </Link>
                 </div>
                 {hostSession && (
                   <button
@@ -2402,24 +2438,32 @@ export default function EmousHomeApp() {
                     <RefreshCw
                       className={`w-3 h-3 ${isLoadingSession ? 'animate-spin' : ''}`}
                     />
-                    <span>Sync Players</span>
+                    <span>Sync Count</span>
                   </button>
                 )}
               </div>
 
               <p className="text-xs text-neutral-300 leading-relaxed">
-                Host an anonymous game in your WhatsApp group! Get{' '}
+                Earn <strong className="text-emous-yellow">₦2,000</strong> when your
+                link receives{' '}
                 <strong className="text-emous-lime">
-                  30+ unique group members
+                  30+ unique complete-sentence messages
                 </strong>{' '}
-                to join your tracked game link in 24h and claim{' '}
-                <strong className="text-emous-yellow">₦2,000 cash</strong> via
-                bank transfer.
+                from different physical devices &amp; locations within a{' '}
+                <strong className="text-white">2-hour interval</strong>{' '}
+                (same location or different browsers on one phone count as 1; resets
+                to 0 after 2h if incomplete).{' '}
+                <Link
+                  href="/terms"
+                  className="underline text-emous-yellow hover:text-emous-lime font-bold"
+                >
+                  Read T&amp;C
+                </Link>
               </p>
 
               {hostSession && (
                 <div className="bg-black/80 rounded-2xl p-3.5 border border-white/15 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-extrabold">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold">
                     <span className="text-white">
                       Session{' '}
                       <span className="text-emous-yellow">
@@ -2428,9 +2472,22 @@ export default function EmousHomeApp() {
                     </span>
                     <span className="text-emous-lime">
                       {hostSession.uniqueDeviceCount} /{' '}
-                      {hostSession.targetDevices} Unique Players
+                      {hostSession.targetDevices} Qualified Messages
                     </span>
                   </div>
+
+                  {/* 2-Hour Countdown Timer Bar */}
+                  {hostSession.status === 'active' && (
+                    <div className="flex items-center justify-between text-[11px] font-bold bg-black/90 px-3 py-1.5 rounded-xl border border-emous-pink/40">
+                      <span className="text-emous-pink inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>2-Hour Window Left:</span>
+                      </span>
+                      <span className="font-display font-extrabold text-emous-yellow">
+                        {sessionCountdown}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="h-3 bg-neutral-900 rounded-full overflow-hidden border border-white/15">
                     <div
@@ -2506,17 +2563,58 @@ export default function EmousHomeApp() {
                     </div>
                   </div>
 
+                  {/* Admin WhatsApp Contact (Call or Chat to Show Proof & Submit Account Details) */}
+                  {(hostSession.adminWhatsapp || BRAND.adminWhatsappNumber) && (
+                    <div className="bg-emous-surface rounded-xl p-2.5 border border-white/15 space-y-2">
+                      <p className="text-[11px] font-bold text-neutral-300">
+                        📞 Completed 30/30? Chat or Call Admin on WhatsApp (
+                        <span className="text-emous-yellow">
+                          {hostSession.adminWhatsapp || BRAND.adminWhatsappNumber}
+                        </span>
+                        ) to show proof &amp; send bank details:
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a
+                          href={`https://api.whatsapp.com/send?phone=${(
+                            hostSession.adminWhatsapp ||
+                            BRAND.adminWhatsappNumber
+                          )
+                            .replace(/\D/g, '')
+                            .replace(/^0/, '234')}&text=${encodeURIComponent(
+                            `Hi Admin! I completed my emous session (${hostSession.sessionCode}) for @${currentHandle} with ${hostSession.uniqueDeviceCount}/${hostSession.targetDevices} messages. Here is my proof & bank details for ₦2,000 payment:`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emous-lime text-black font-display font-extrabold text-[10px] py-1.5 px-2.5 rounded-lg border border-black inline-flex items-center justify-center gap-1"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Chat Admin Proof</span>
+                        </a>
+                        <a
+                          href={`tel:${(
+                            hostSession.adminWhatsapp ||
+                            BRAND.adminWhatsappNumber
+                          ).replace(/\s+/g, '')}`}
+                          className="bg-black text-white font-display font-extrabold text-[10px] py-1.5 px-2.5 rounded-lg border border-white/25 inline-flex items-center justify-center gap-1"
+                        >
+                          <Phone className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Call Admin</span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Claim Button / Paid Status */}
                   {hostSession.claimStatus === 'paid' ? (
                     <div className="bg-emous-lime text-black rounded-xl px-3 py-2 text-xs font-extrabold text-center">
-                      ✓ ₦2,000 PAID!{' '}
+                      ☑️ ₦2,000 PAID!{' '}
                       {hostSession.claimReference
                         ? `(Ref: ${hostSession.claimReference})`
                         : ''}
                     </div>
                   ) : hostSession.claimStatus === 'pending' ? (
                     <div className="bg-emous-yellow text-black rounded-xl px-3 py-2 text-xs font-extrabold text-center">
-                      ⏳ Claim Submitted — Founder Verifying Bank Transfer (₦2,000)
+                      ⏳ Claim Submitted — Chat/Call Admin WhatsApp with Proof for ₦2,000 Transfer
                     </div>
                   ) : hostSession.uniqueDeviceCount >= hostSession.targetDevices ? (
                     <button
@@ -2525,7 +2623,7 @@ export default function EmousHomeApp() {
                       className="w-full bg-emous-pink text-white font-display font-extrabold text-xs sm:text-sm py-2.5 px-4 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1.5 animate-pulse"
                     >
                       <Wallet className="w-4 h-4" />
-                      <span>🎉 30/30 Reached! Claim ₦2,000 Reward</span>
+                      <span>🎉 30/30 Qualified! Submit Account &amp; Claim ₦2,000</span>
                     </button>
                   ) : (
                     <p className="text-[11px] text-neutral-400 text-center">
@@ -2537,7 +2635,7 @@ export default function EmousHomeApp() {
                             hostSession.uniqueDeviceCount
                         )}
                       </strong>{' '}
-                      more unique devices in this session to unlock ₦2,000 payout
+                      more unique device sentences within 2h to unlock ₦2,000
                     </p>
                   )}
                 </div>
@@ -3453,10 +3551,51 @@ export default function EmousHomeApp() {
                   ? 'Submitting...'
                   : 'Submit ₦2,000 Payout Request 🚀'}
               </button>
+
+              {(hostSession.adminWhatsapp || BRAND.adminWhatsappNumber) && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <a
+                    href={`https://api.whatsapp.com/send?phone=${(
+                      hostSession.adminWhatsapp || BRAND.adminWhatsappNumber
+                    )
+                      .replace(/\D/g, '')
+                      .replace(/^0/, '234')}&text=${encodeURIComponent(
+                      `Hi Admin! Session ${hostSession.sessionCode} (@${currentHandle}) reached 30/30! Bank: ${claimBankName}, Acct: ${claimAccountNumber}, Name: ${claimAccountName}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-emous-lime text-black font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border-2 border-black inline-flex items-center justify-center gap-1"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp Proof</span>
+                  </a>
+                  <a
+                    href={`tel:${(
+                      hostSession.adminWhatsapp || BRAND.adminWhatsappNumber
+                    ).replace(/\s+/g, '')}`}
+                    className="bg-black text-white font-display font-extrabold text-[11px] py-2 px-3 rounded-xl border border-white/25 inline-flex items-center justify-center gap-1"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Call Admin</span>
+                  </a>
+                </div>
+              )}
             </form>
           </div>
         </div>
       )}
+
+      {/* Minimal Footer with Tiny Clickable T&C Link */}
+      <footer className="max-w-5xl mx-auto px-4 pt-8 pb-6 text-center text-[11px] text-neutral-500 flex items-center justify-center gap-3">
+        <span>emous — {BRAND.tagline}</span>
+        <span>•</span>
+        <Link
+          href="/terms"
+          className="underline text-neutral-400 hover:text-emous-lime font-bold"
+        >
+          T&amp;C
+        </Link>
+      </footer>
     </div>
   );
 }

@@ -131,11 +131,15 @@ export interface LocalHostSessionDoc {
   groupName: string;
   uniqueDevices: string[];
   uniqueIpHashes: string[];
+  uniqueHardwareKeys?: string[];
+  uniqueLocationKeys?: string[];
+  qualifiedMessageHashes?: string[];
   cities: string[];
   eventTimestamps: string[];
   targetDevices: number;
   rewardNaira: number;
   status: 'active' | 'qualified' | 'claimed' | 'paid' | 'rejected';
+  windowStartedAt?: string;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;

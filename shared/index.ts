@@ -11,6 +11,10 @@ export const BRAND = {
   tagline: 'No Names. Just Real Talk.',
   inboxHook: '🤫 Drop your link on your socials & get anonymous confessions!',
   growthFooterText: 'Want to receive your own anonymous messages? Get emous Free',
+  adminWhatsappNumber:
+    process.env.NEXT_PUBLIC_ADMIN_WHATSAPP ||
+    process.env.ADMIN_WHATSAPP ||
+    '',
   maxPostLength: 300,
   maxFlagThreshold: 3,
   inboxBurnDays: 30,
@@ -824,6 +828,65 @@ export interface InboxMessageDTO {
 
 export const LOYALTY_TARGET_DEVICES = 30;
 export const LOYALTY_REWARD_NAIRA = 2000;
+export const LOYALTY_WINDOW_HOURS = 2;
+export const LOYALTY_WINDOW_MS = LOYALTY_WINDOW_HOURS * 60 * 60 * 1000; // 2-hour reset interval
+
+/**
+ * Validates that an anonymous message is BOTH unique and contains at least one complete meaningful sentence
+ * (minimum 4 words with >= 2 alphabetic letters each, >= 3 distinct words, and >= 18 characters).
+ */
+export function evaluateCompleteUniqueSentence(
+  rawText: string,
+  existingHashes: string[] = []
+): { qualified: boolean; normalized: string; reason?: string } {
+  const cleaned = (rawText || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  const normalized = cleaned
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length < 18) {
+    return {
+      qualified: false,
+      normalized,
+      reason: 'Message too short to count as a complete sentence (min 18 characters).',
+    };
+  }
+
+  const words = normalized
+    .split(' ')
+    .filter((w) => /[a-z]{2,}/.test(w));
+
+  if (words.length < 4) {
+    return {
+      qualified: false,
+      normalized,
+      reason: 'Message must contain a complete sentence (at least 4 words).',
+    };
+  }
+
+  const distinctWords = new Set(words);
+  if (distinctWords.size < 3) {
+    return {
+      qualified: false,
+      normalized,
+      reason: 'Message must contain varied words rather than repeated word spam.',
+    };
+  }
+
+  if (existingHashes.includes(normalized)) {
+    return {
+      qualified: false,
+      normalized,
+      reason: 'Duplicate message already counted in this session.',
+    };
+  }
+
+  return { qualified: true, normalized };
+}
 
 export const NIGERIAN_BANKS = [
   'OPay',
@@ -873,10 +936,14 @@ export interface HostSessionDTO {
   uniqueDeviceCount: number;
   targetDevices: number;
   rewardNaira: number;
+  windowHours?: number;
+  didAutoReset?: boolean;
+  adminWhatsapp?: string;
   status: 'active' | 'qualified' | 'claimed' | 'paid' | 'rejected';
   shareUrl: string;
   claimStatus?: 'none' | 'pending' | 'paid' | 'rejected';
   claimReference?: string;
+  windowStartedAt?: string;
   createdAt: string;
   expiresAt: string;
 }
