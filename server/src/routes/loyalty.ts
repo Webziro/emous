@@ -53,7 +53,10 @@ function formatSessionDTO(doc: any, claimDoc?: any, didAutoReset = false) {
     shareUrl: `https://${domain}/${doc.hostHandle}?g=${doc.sessionCode}`,
     claimStatus: claimDoc ? claimDoc.status : 'none',
     claimReference: claimDoc?.paymentReference || undefined,
-    windowStartedAt: doc.windowStartedAt || doc.createdAt,
+    windowStartedAt:
+      Array.isArray(doc.uniqueDevices) && doc.uniqueDevices.length > 0
+        ? doc.windowStartedAt || doc.createdAt
+        : undefined,
     createdAt: doc.createdAt,
     expiresAt: doc.expiresAt,
   };
@@ -87,7 +90,7 @@ function calcSessionMinutes(timestamps: any[]): number {
 
 /**
  * POST /api/v1/loyalty/session
- * Gets or starts the group admin's 24-hour trackable game session (₦2,000 when ≥ 30 unique devices join).
+ * Gets or starts the group admin's 3-hour trackable game session (starts counting when 1st message drops; ₦2,000 when ≥ 30 unique devices join).
  */
 loyaltyRouter.post('/session', async (req: Request, res: Response) => {
   try {
@@ -134,7 +137,6 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
           targetDevices: LOYALTY_TARGET_DEVICES,
           rewardNaira: LOYALTY_REWARD_NAIRA,
           status: 'active',
-          windowStartedAt: now,
           expiresAt,
         });
       } else {
@@ -184,7 +186,6 @@ loyaltyRouter.post('/session', async (req: Request, res: Response) => {
         targetDevices: LOYALTY_TARGET_DEVICES,
         rewardNaira: LOYALTY_REWARD_NAIRA,
         status: 'active',
-        windowStartedAt: nowIso,
         expiresAt: expiresAt.toISOString(),
         createdAt: nowIso,
         updatedAt: nowIso,

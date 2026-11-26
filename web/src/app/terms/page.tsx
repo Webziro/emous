@@ -63,12 +63,13 @@ export default function TermsAndConditionsPage() {
             </li>
             <li>
               <strong className="text-emous-pink">
-                Strict 2-Hour Interval (Auto-Reset to 0):
+                Strict 3-Hour Interval (Auto-Reset to 0):
               </strong>{' '}
               All 30 qualified messages must arrive within a{' '}
-              <strong>2-hour countdown window</strong> from the start of your active
-              count. If 30 messages are not completed within 2 hours, the counter{' '}
-              <strong>automatically resets back to 0</strong>.
+              <strong>3-hour countdown window</strong>, which starts ticking the
+              moment the <strong>first qualified message</strong> drops in your
+              inbox. If 30 messages are not completed within 3 hours, the
+              counter <strong>automatically resets back to 0</strong>.
             </li>
             <li>
               <strong className="text-emous-yellow">
@@ -85,7 +86,7 @@ export default function TermsAndConditionsPage() {
             </li>
             <li>
               <strong className="text-white">Proof & Manual Payout:</strong> Upon
-              reaching 30/30 inside the 2-hour window, submit your bank account
+              reaching 30/30 inside the 3-hour window, submit your bank account
               details in-app and chat or call the Admin WhatsApp line with proof of
               completion. Once verified as genuine traffic, manual bank transfer of
               ₦2,000 is processed and ticked as Paid.

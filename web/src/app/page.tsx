@@ -849,7 +849,7 @@ export default function EmousHomeApp() {
         setHostSession(s);
         if (s.didAutoReset) {
           showToast(
-            '⏱️ 2-hour window ended before 30/30 — counter reset back to 0!'
+            '⏱️ 3-hour window ended before 30/30 — counter reset back to 0!'
           );
         }
       } catch {
@@ -860,10 +860,14 @@ export default function EmousHomeApp() {
     [identity?.handle, demoGoldenWizardMode, groupNameInput, showToast]
   );
 
-  // Live 1-second 2-hour interval countdown timer for active WhatsApp Admin session
-  const [sessionCountdown, setSessionCountdown] = useState<string>('2h 00m 00s');
+  // Live 1-second 3-hour interval countdown timer (starts when the 1st qualified message drops)
+  const [sessionCountdown, setSessionCountdown] = useState<string>('3h 00m 00s');
   useEffect(() => {
     if (!hostSession || hostSession.status !== 'active') return;
+    if (!hostSession.windowStartedAt || hostSession.uniqueDeviceCount === 0) {
+      setSessionCountdown('Starts on 1st message (3h 00m 00s)');
+      return;
+    }
     const tick = () => {
       const ms = new Date(hostSession.expiresAt).getTime() - Date.now();
       if (ms <= 0) {
@@ -2338,17 +2342,17 @@ export default function EmousHomeApp() {
               <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full">
                 <button
                   onClick={handleCopyInboxLink}
-                  className="bg-emous-pink text-white font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
+                  className="min-w-0 w-full bg-emous-pink text-white font-display font-extrabold text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-2.5 rounded-xl flyer-btn uppercase flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5"
                 >
                   {copiedLink ? (
                     <>
                       <Check className="w-4 h-4 shrink-0 stroke-[3]" />
-                      <span>Copied</span>
+                      <span className="truncate max-w-full">Copied</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-4 h-4 shrink-0 stroke-[2.75]" />
-                      <span>Copy</span>
+                      <span className="truncate max-w-full">Copy</span>
                     </>
                   )}
                 </button>
@@ -2359,18 +2363,18 @@ export default function EmousHomeApp() {
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-black text-emous-lime font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
+                  className="min-w-0 w-full bg-black text-emous-lime font-display font-extrabold text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-2.5 rounded-xl flyer-btn uppercase flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0 stroke-[2.75] fill-current" />
-                  <span>WhatsApp</span>
+                  <span className="truncate max-w-full">WhatsApp</span>
                 </a>
 
                 <Link
                   href={`/${currentHandle}`}
-                  className="bg-emous-yellow text-black font-display font-extrabold text-[10px] sm:text-xs px-1.5 sm:px-3 py-2.5 rounded-xl flyer-btn uppercase flex items-center justify-center gap-1 sm:gap-1.5"
+                  className="min-w-0 w-full bg-emous-yellow text-black font-display font-extrabold text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-2.5 rounded-xl flyer-btn uppercase flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5"
                 >
                   <ExternalLink className="w-4 h-4 shrink-0 stroke-[2.75]" />
-                  <span>Open</span>
+                  <span className="truncate max-w-full">Open</span>
                 </Link>
               </div>
             </div>
@@ -2450,9 +2454,10 @@ export default function EmousHomeApp() {
                   30+ unique complete-sentence messages
                 </strong>{' '}
                 from different physical devices &amp; locations within a{' '}
-                <strong className="text-white">2-hour interval</strong>{' '}
-                (same location or different browsers on one phone count as 1; resets
-                to 0 after 2h if incomplete).{' '}
+                <strong className="text-white">3-hour interval</strong>{' '}
+                (timer starts on your 1st message; same location or different
+                browsers on one phone count as 1; resets to 0 after 3h if
+                incomplete).{' '}
                 <Link
                   href="/terms"
                   className="underline text-emous-yellow hover:text-emous-lime font-bold"
@@ -2476,12 +2481,12 @@ export default function EmousHomeApp() {
                     </span>
                   </div>
 
-                  {/* 2-Hour Countdown Timer Bar */}
+                  {/* 3-Hour Countdown Timer Bar */}
                   {hostSession.status === 'active' && (
-                    <div className="flex items-center justify-between text-[11px] font-bold bg-black/90 px-3 py-1.5 rounded-xl border border-emous-pink/40">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-bold bg-black/90 px-3 py-1.5 rounded-xl border border-emous-pink/40">
                       <span className="text-emous-pink inline-flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>2-Hour Window Left:</span>
+                        <span>3-Hour Window:</span>
                       </span>
                       <span className="font-display font-extrabold text-emous-yellow">
                         {sessionCountdown}
@@ -2635,7 +2640,7 @@ export default function EmousHomeApp() {
                             hostSession.uniqueDeviceCount
                         )}
                       </strong>{' '}
-                      more unique device sentences within 2h to unlock ₦2,000
+                      more unique device sentences within 3h to unlock ₦2,000
                     </p>
                   )}
                 </div>

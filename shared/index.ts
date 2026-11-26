@@ -828,8 +828,8 @@ export interface InboxMessageDTO {
 
 export const LOYALTY_TARGET_DEVICES = 30;
 export const LOYALTY_REWARD_NAIRA = 2000;
-export const LOYALTY_WINDOW_HOURS = 2;
-export const LOYALTY_WINDOW_MS = LOYALTY_WINDOW_HOURS * 60 * 60 * 1000; // 2-hour reset interval
+export const LOYALTY_WINDOW_HOURS = 3;
+export const LOYALTY_WINDOW_MS = LOYALTY_WINDOW_HOURS * 60 * 60 * 1000; // 3-hour reset interval
 
 /**
  * Validates that an anonymous message is BOTH unique and contains at least one complete meaningful sentence

@@ -170,13 +170,17 @@ export function buildIpSubnetPrefix(ip: string): string {
 
 export function resetExpiredActiveSessionIfNeeded(session: any): boolean {
   if (!session || session.status !== 'active') return false;
+  // Timer only starts once the first qualified message drops in the inbox
+  if (!Array.isArray(session.uniqueDevices) || session.uniqueDevices.length === 0) {
+    return false;
+  }
   const now = new Date();
   const expiresMs = new Date(session.expiresAt).getTime();
   if (Number.isFinite(expiresMs) && now.getTime() <= expiresMs) {
     return false;
   }
 
-  // Strictly reset progress back to zero after the 2-hour interval expires incomplete
+  // Strictly reset progress back to zero after the 3-hour interval expires incomplete
   session.uniqueDevices = [];
   session.uniqueIpHashes = [];
   session.uniqueHardwareKeys = [];
@@ -185,10 +189,10 @@ export function resetExpiredActiveSessionIfNeeded(session: any): boolean {
   session.cities = [];
   session.eventTimestamps = [];
   if (isUsingMongo()) {
-    session.windowStartedAt = now;
+    session.windowStartedAt = undefined;
     session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS);
   } else {
-    session.windowStartedAt = now.toISOString();
+    session.windowStartedAt = undefined;
     session.expiresAt = new Date(now.getTime() + LOYALTY_WINDOW_MS).toISOString();
     session.updatedAt = now.toISOString();
   }
@@ -197,7 +201,7 @@ export function resetExpiredActiveSessionIfNeeded(session: any): boolean {
 
 /**
  * Credits a qualified message toward a Host Game Session ONLY when ALL strict rules pass:
- * 1. Sent within the active 2-hour window (auto-resets to 0 if 2 hours elapsed without hitting 30).
+ * 1. Sent within the active 3-hour window (starts on 1st message; auto-resets to 0 if 3 hours elapse without hitting 30).
  * 2. Message contains at least one complete sentence (>= 4 words, >= 18 chars) & is unique (not duplicated).
  * 3. Distinct physical device (hardware signature + subnet hash catches Chrome/Safari/Firefox on same phone!).
  * 4. Distinct location (same IP or same GPS coordinate box counts strictly as ONE!).
