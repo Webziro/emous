@@ -170,9 +170,7 @@ export default function AdminFounderDashboard() {
               Analytics & Payout Verification
             </h1>
             <p className="text-xs text-neutral-400">
-              Enter your private Founder Passcode configured in your server{' '}
-              <code className="text-emous-yellow">ADMIN_SECRET</code>{' '}
-              environment variable to inspect traffic & verify ₦2,000 claims.
+              Enter your developer passcode to gain insight
             </p>
           </div>
 
@@ -181,7 +179,7 @@ export default function AdminFounderDashboard() {
               type="password"
               value={secretInput}
               onChange={(e) => setSecretInput(e.target.value)}
-              placeholder="Enter Founder Passcode..."
+              placeholder="Enter developer passcode..."
               className="w-full bg-black text-white rounded-xl px-4 py-3 border-2 border-white/25 font-bold text-sm focus:outline-none focus:border-emous-lime"
             />
             {authError && (
